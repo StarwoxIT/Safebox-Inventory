@@ -1,0 +1,29 @@
+{
+  "name": "safebox-energy-ims",
+  "version": "1.0.0",
+  "description": "SafeBox Energy Inventory Management System",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd client && npm install",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "nodemon server/index.js",
+    "client:dev": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js",
+    "setup": "npm run install:all && node server/db/seed.js && echo '\\n✅ SafeBox Energy IMS ready. Run: npm start'"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^9.4.3",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemon": "^3.0.3",
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
