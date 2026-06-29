@@ -127,7 +127,7 @@ export function Grid2({ children }) {
   return <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>{children}</div>;
 }
 
-export function DataTable({ cols, rows, empty='No data', pageSize=20 }) {
+export function DataTable({ cols, rows, empty='No data', pageSize=20, onRowClick }) {
   const [page, setPage] = useState(1);
 
   // Reset to page 1 whenever the dataset changes (e.g. after filtering)
@@ -157,7 +157,7 @@ export function DataTable({ cols, rows, empty='No data', pageSize=20 }) {
         <thead>
           <tr>{cols.map(c=><th key={c.key} style={{ background:'var(--color-background-secondary)',padding:'8px 12px',textAlign:c.align||'left',fontSize:10,fontWeight:500,color:'var(--color-text-secondary)',textTransform:'uppercase',letterSpacing:'.04em',borderBottom:'0.5px solid var(--color-border-tertiary)',width:c.width,whiteSpace:'nowrap' }}>{c.label}</th>)}</tr>
         </thead>
-        <tbody>{pageRows.map((r,i)=><tr key={i} style={{ borderBottom:'0.5px solid var(--color-border-tertiary)' }} onMouseEnter={e=>e.currentTarget.style.background='var(--color-background-secondary)'} onMouseLeave={e=>e.currentTarget.style.background=''}>{cols.map(c=><td key={c.key} style={{ padding:'9px 12px',textAlign:c.align||'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:c.wrap?'normal':'nowrap' }}>{c.render?c.render(r):r[c.key]}</td>)}</tr>)}</tbody>
+        <tbody>{pageRows.map((r,i)=><tr key={i} style={{ borderBottom:'0.5px solid var(--color-border-tertiary)',cursor:onRowClick?'pointer':'default' }} onClick={onRowClick?()=>onRowClick(r):undefined} onMouseEnter={e=>e.currentTarget.style.background='var(--color-background-secondary)'} onMouseLeave={e=>e.currentTarget.style.background=''}>{cols.map(c=><td key={c.key} style={{ padding:'9px 12px',textAlign:c.align||'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:c.wrap?'normal':'nowrap' }} onClick={c.stopRowClick?(e)=>e.stopPropagation():undefined}>{c.render?c.render(r):r[c.key]}</td>)}</tr>)}</tbody>
       </table>
     </div>
     {totalPages > 1 && (
