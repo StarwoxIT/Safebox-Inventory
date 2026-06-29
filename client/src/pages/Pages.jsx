@@ -4,8 +4,9 @@ export { default as Login } from './Login';
 
 // Inventory
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Card, Btn, Modal, FormRow, Input, PasswordInput, Select, Grid2, DataTable, Badge, StatusBadge, Alert, fmt, fmtN, Progress } from '../components/ui';
+import { Card, CardHeader, KpiCard, Btn, Modal, FormRow, Input, PasswordInput, Select, Grid2, DataTable, Badge, StatusBadge, Alert, fmt, fmtN, Progress } from '../components/ui';
 import api from '../utils/api';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -17,15 +18,25 @@ const useFetch = (path, deps=[]) => {
   useEffect(reload, deps);
   return [data, loading, reload];
 };
+const MONTHS = [['01','Jan'],['02','Feb'],['03','Mar'],['04','Apr'],['05','May'],['06','Jun'],['07','Jul'],['08','Aug'],['09','Sep'],['10','Oct'],['11','Nov'],['12','Dec']];
+const yearsFrom = (rows, key) => [...new Set(rows.map(r=>r[key]?.slice(0,4)).filter(Boolean))].sort().reverse();
+const selStyle = { padding:'5px 9px',border:'0.5px solid var(--color-border-secondary)',borderRadius:'var(--border-radius-md)',fontSize:12,background:'var(--color-background-primary)',color:'var(--color-text-primary)' };
 
 // ── Inventory Page ─────────────────────────────────────────────────────────
 export function Inventory() {
   const { isSA } = useAuth();
+  const nav = useNavigate();
   const [products, loading, reload] = useFetch('/products');
   const [stock] = useFetch('/products/stock');
   const [cats] = useFetch('/categories');
+  const [units] = useFetch('/units');
   const [catFilter, setCatFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
@@ -34,7 +45,7 @@ export function Inventory() {
 
   const stockMap = Object.fromEntries(stock.map(s=>[s.id,s.current_stock]));
 
-  const openAdd = () => { const c=cats[0]; setForm({category:c?.name||'',subcategory:'',brand:'',model:'',unit:'Unit',min_threshold:0,max_threshold:100,unit_cost:0}); setSubs(c?.subs?.map(s=>s.name)||[]); setEditing(null); setModal(true); };
+  const openAdd = () => { const c=cats[0]; setForm({category:c?.name||'',subcategory:'',brand:'',model:'',unit:units[0]?.name||'Unit',min_threshold:0,max_threshold:100,unit_cost:0}); setSubs(c?.subs?.map(s=>s.name)||[]); setEditing(null); setModal(true); };
   const openEdit = p => { setForm({...p}); setSubs(cats.find(c=>c.name===p.category)?.subs?.map(s=>s.name)||[]); setEditing(p.id); setModal(true); };
   const onCatChange = v => { sf({category:v,subcategory:''}); setSubs(cats.find(c=>c.name===v)?.subs?.map(s=>s.name)||[]); };
   const save = async () => {
@@ -42,23 +53,58 @@ export function Inventory() {
     catch (e) { alert(e.message); }
   };
 
-  const filtered = products.filter(p=>(!catFilter||p.category===catFilter)&&(!search||p.model.toLowerCase().includes(search.toLowerCase())||p.brand?.toLowerCase().includes(search.toLowerCase())));
+  const years = yearsFrom(products, 'created_at');
+  const filtered = products
+    .filter(p=>(!catFilter||p.category===catFilter)&&(!search||p.model.toLowerCase().includes(search.toLowerCase())||p.brand?.toLowerCase().includes(search.toLowerCase())))
+    .filter(p=>!yearFilter || p.created_at?.startsWith(yearFilter))
+    .filter(p=>!monthFilter || p.created_at?.slice(5,7)===monthFilter)
+    .filter(p=>!dateFrom || p.created_at?.slice(0,10) >= dateFrom)
+    .filter(p=>!dateTo || p.created_at?.slice(0,10) <= dateTo)
+    .sort((a,b)=>{
+      if (sortBy==='date_desc') return (b.created_at||'').localeCompare(a.created_at||'');
+      if (sortBy==='date_asc') return (a.created_at||'').localeCompare(b.created_at||'');
+      if (sortBy==='name') return (a.model||'').localeCompare(b.model||'');
+      if (sortBy==='stock_desc') return (stockMap[b.id]||0)-(stockMap[a.id]||0);
+      return 0;
+    });
+
+  const clearFilters = () => { setCatFilter(''); setSearch(''); setYearFilter(''); setMonthFilter(''); setDateFrom(''); setDateTo(''); };
+  const hasFilters = catFilter||search||yearFilter||monthFilter||dateFrom||dateTo;
 
   return <>
     <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
-      <div><div style={{ fontSize:16,fontWeight:500 }}>Product catalogue</div><div style={{ fontSize:11,color:'var(--color-text-secondary)',marginTop:2 }}>All warehouse products & thresholds</div></div>
+      <div><div style={{ fontSize:16,fontWeight:500 }}>Product catalogue</div><div style={{ fontSize:11,color:'var(--color-text-secondary)',marginTop:2 }}>All warehouse products & thresholds — click a row for full detail</div></div>
       <Btn variant="primary" onClick={openAdd}><i className="ti ti-plus" aria-hidden="true" />Add product</Btn>
     </div>
     {!isSA() && <Alert type="warning"><i className="ti ti-info-circle" aria-hidden="true" />New products require Super Admin approval before appearing in stock calculations</Alert>}
-    <div style={{ display:'flex',gap:8,marginBottom:12 }}>
-      <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{ padding:'5px 9px',border:'0.5px solid var(--color-border-secondary)',borderRadius:'var(--border-radius-md)',fontSize:12,background:'var(--color-background-primary)',color:'var(--color-text-primary)' }}>
+    <div style={{ display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center' }}>
+      <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={selStyle}>
         <option value="">All categories</option>
         {cats.map(c=><option key={c.id}>{c.name}</option>)}
       </select>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search model or brand…" style={{ padding:'5px 9px',border:'0.5px solid var(--color-border-secondary)',borderRadius:'var(--border-radius-md)',fontSize:12,width:200 }} />
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search model or brand…" style={{ ...selStyle,width:180 }} />
+      <select value={yearFilter} onChange={e=>setYearFilter(e.target.value)} style={selStyle}>
+        <option value="">All years</option>
+        {years.map(y=><option key={y}>{y}</option>)}
+      </select>
+      <select value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} style={selStyle}>
+        <option value="">All months</option>
+        {MONTHS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+      </select>
+      <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="Date added from" style={selStyle} />
+      <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="Date added to" style={selStyle} />
+      <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={selStyle}>
+        <option value="date_desc">Newest first</option>
+        <option value="date_asc">Oldest first</option>
+        <option value="name">Sort by name</option>
+        <option value="stock_desc">Highest stock</option>
+      </select>
+      {hasFilters && <Btn size="sm" onClick={clearFilters}><i className="ti ti-x" aria-hidden="true"/>Clear</Btn>}
+      <span style={{ fontSize:11,color:'var(--color-text-secondary)',marginLeft:4 }}>{filtered.length} product{filtered.length!==1?'s':''}</span>
     </div>
     <Card>
       <DataTable
+        onRowClick={p=>nav(`/inventory/${p.id}`)}
         cols={[
           {key:'id',label:'ID',width:80},{key:'brand',label:'Brand',width:90},{key:'model',label:'Model',wrap:true},
           {key:'category',label:'Category',width:110,render:r=><Badge color="gray">{r.category}</Badge>},
@@ -67,10 +113,10 @@ export function Inventory() {
           {key:'level',label:'Level',width:80,render:r=>{ const s=stockMap[r.id]||0; return <Progress value={s} max={r.max_threshold} color={s<=r.min_threshold?'#A32D2D':s<=r.min_threshold*1.2?'#BA7517':'#0F6E56'}/>; }},
           {key:'unit_cost',label:'Unit cost',width:110,align:'right',render:r=>fmt(r.unit_cost)},
           {key:'value',label:'Total value',width:120,align:'right',render:r=>fmt((stockMap[r.id]||0)*r.unit_cost)},
-          {key:'edit',label:'',width:40,render:r=><Btn size="sm" onClick={()=>openEdit(r)}><i className="ti ti-edit" aria-hidden="true"/></Btn>},
-          {key:'del',label:'',width:40,render:r=>isSA()&&<Btn size="sm" variant="danger" onClick={async()=>{ if(window.confirm(`Delete ${r.model}?`)){try{await api.del('/products/'+r.id);reload();}catch(e){alert(e.message);}}}}><i className="ti ti-trash" aria-hidden="true"/></Btn>},
+          {key:'edit',label:'',width:40,stopRowClick:true,render:r=><Btn size="sm" onClick={()=>openEdit(r)}><i className="ti ti-edit" aria-hidden="true"/></Btn>},
+          {key:'del',label:'',width:40,stopRowClick:true,render:r=>isSA()&&<Btn size="sm" variant="danger" onClick={async()=>{ if(window.confirm(`Delete ${r.model}?`)){try{await api.del('/products/'+r.id);reload();}catch(e){alert(e.message);}}}}><i className="ti ti-trash" aria-hidden="true"/></Btn>},
         ]}
-        rows={filtered} empty="No products found"
+        rows={filtered} empty="No products match your filters"
       />
     </Card>
     <Modal open={modal} title={editing?'Edit product':'Add product'} onClose={()=>setModal(false)} onSave={save}>
@@ -80,7 +126,7 @@ export function Inventory() {
       </Grid2>
       <Grid2>
         <FormRow label="Brand"><Input value={form.brand||''} onChange={v=>sf({brand:v})} placeholder="e.g. BYD"/></FormRow>
-        <FormRow label="Unit"><Select value={form.unit||'Unit'} onChange={v=>sf({unit:v})}><option>Unit</option><option>Metre</option><option>Set</option><option>Pair</option><option>Roll</option></Select></FormRow>
+        <FormRow label="Unit"><Select value={form.unit||units[0]?.name||'Unit'} onChange={v=>sf({unit:v})}>{units.map(u=><option key={u.id}>{u.name}</option>)}</Select></FormRow>
       </Grid2>
       <FormRow label="Model / description"><Input value={form.model||''} onChange={v=>sf({model:v})} placeholder="e.g. BYD B-Box 5kWh"/></FormRow>
       <Grid2>
@@ -89,6 +135,136 @@ export function Inventory() {
       </Grid2>
       <FormRow label="Max threshold"><Input type="number" value={form.max_threshold||''} onChange={v=>sf({max_threshold:v})}/></FormRow>
       {!isSA() && <Alert type="warning" style={{marginTop:8}}><i className="ti ti-info-circle" aria-hidden="true"/>Will be submitted for Super Admin approval</Alert>}
+    </Modal>
+  </>;
+}
+
+// ── Product Detail Page ───────────────────────────────────────────────────
+export function ProductDetail() {
+  const { id } = useParams();
+  const nav = useNavigate();
+  const [products, loadingP] = useFetch('/products');
+  const [stock] = useFetch('/products/stock');
+  const [movements] = useFetch('/movements');
+  const [search, setSearch] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc');
+
+  const product = products.find(p=>p.id===id);
+  const stockInfo = stock.find(s=>s.id===id);
+  const productMovements = movements.filter(m=>m.product_id===id);
+  const years = yearsFrom(productMovements, 'date');
+  const IN_T = ['Purchase (IN)','Return (IN)','Transfer IN','Client Return to Stock','Project Return to Stock'];
+
+  const filtered = productMovements
+    .filter(m=>!search || m.movement_type.toLowerCase().includes(search.toLowerCase()) || (m.source||'').toLowerCase().includes(search.toLowerCase()) || (m.notes||'').toLowerCase().includes(search.toLowerCase()))
+    .filter(m=>!yearFilter || m.date?.startsWith(yearFilter))
+    .filter(m=>!monthFilter || m.date?.slice(5,7)===monthFilter)
+    .filter(m=>!dateFrom || m.date >= dateFrom)
+    .filter(m=>!dateTo || m.date <= dateTo)
+    .sort((a,b)=>{
+      if (sortBy==='date_desc') return (b.date||'').localeCompare(a.date||'');
+      if (sortBy==='date_asc') return (a.date||'').localeCompare(b.date||'');
+      if (sortBy==='qty_desc') return b.quantity-a.quantity;
+      return 0;
+    });
+
+  const clearFilters = () => { setSearch(''); setYearFilter(''); setMonthFilter(''); setDateFrom(''); setDateTo(''); };
+  const hasFilters = search||yearFilter||monthFilter||dateFrom||dateTo;
+
+  if (loadingP) return <div style={{ padding:32,textAlign:'center',color:'var(--color-text-secondary)' }}>Loading…</div>;
+  if (!product) return <div style={{ padding:32,textAlign:'center',color:'#A32D2D' }}>Product not found. <Btn size="sm" onClick={()=>nav('/inventory')}>Back to catalogue</Btn></div>;
+
+  const s = stockInfo?.current_stock ?? 0;
+
+  return <>
+    <Btn onClick={()=>nav('/inventory')} style={{ marginBottom:16 }}><i className="ti ti-arrow-left" aria-hidden="true"/>Back to catalogue</Btn>
+    <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
+      <div>
+        <div style={{ fontSize:16,fontWeight:500 }}>{product.brand} {product.model}</div>
+        <div style={{ fontSize:11,color:'var(--color-text-secondary)',marginTop:2 }}>{product.id} · {product.category}{product.subcategory?` · ${product.subcategory}`:''}</div>
+      </div>
+      <StatusBadge status={product.status}/>
+    </div>
+    <div style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:10,marginBottom:16 }}>
+      <KpiCard label="Available quantity" value={fmtN(s)} valueColor={s<=product.min_threshold?'#A32D2D':s<=product.min_threshold*1.2?'#BA7517':undefined} sub={`Unit: ${product.unit}`} />
+      <KpiCard label="Unit cost" value={fmt(product.unit_cost)} />
+      <KpiCard label="Total value" value={fmt(s*product.unit_cost)} />
+      <KpiCard label="Threshold range" value={`${fmtN(product.min_threshold)} – ${fmtN(product.max_threshold)}`} sub="Min – Max" />
+    </div>
+    <Card>
+      <CardHeader title="Movement log history" icon="history" />
+      <div style={{ padding:'12px 14px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',borderBottom:'0.5px solid var(--color-border-tertiary)' }}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search type, source, notes…" style={{ ...selStyle,width:200 }} />
+        <select value={yearFilter} onChange={e=>setYearFilter(e.target.value)} style={selStyle}>
+          <option value="">All years</option>
+          {years.map(y=><option key={y}>{y}</option>)}
+        </select>
+        <select value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} style={selStyle}>
+          <option value="">All months</option>
+          {MONTHS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="Date from" style={selStyle} />
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="Date to" style={selStyle} />
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={selStyle}>
+          <option value="date_desc">Newest first</option>
+          <option value="date_asc">Oldest first</option>
+          <option value="qty_desc">Highest quantity</option>
+        </select>
+        {hasFilters && <Btn size="sm" onClick={clearFilters}><i className="ti ti-x" aria-hidden="true"/>Clear</Btn>}
+        <span style={{ fontSize:11,color:'var(--color-text-secondary)' }}>{filtered.length} record{filtered.length!==1?'s':''}</span>
+      </div>
+      <DataTable
+        cols={[
+          {key:'id',label:'ID',width:80},{key:'date',label:'Date',width:95},
+          {key:'movement_type',label:'Type',width:170,render:r=><Badge color={IN_T.includes(r.movement_type)?'teal':'red'}>{r.movement_type}</Badge>},
+          {key:'condition',label:'Condition',width:95,render:r=>{ const c={New:'green',Repaired:'teal',Returned:'amber',Refurbished:'blue',Faulty:'red'}; return <Badge color={c[r.condition||'New']||'gray'}>{r.condition||'New'}</Badge>; }},
+          {key:'quantity',label:'Qty',width:70,align:'right',render:r=><strong style={{color:IN_T.includes(r.movement_type)?'#0F6E56':'#A32D2D'}}>{IN_T.includes(r.movement_type)?'+':'-'}{fmtN(r.quantity)}</strong>},
+          {key:'status',label:'Approval',width:100,render:r=><StatusBadge status={r.status}/>},
+          {key:'source',label:'Source',wrap:true},{key:'recorded_by_name',label:'By',width:90},
+        ]}
+        rows={filtered} empty="No movement history for this product"
+      />
+    </Card>
+  </>;
+}
+
+// ── Units Page ─────────────────────────────────────────────────────────────
+export function Units() {
+  const { isSA } = useAuth();
+  const [units, loading, reload] = useFetch('/units');
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name:'' });
+  if (!isSA()) return <div style={{ textAlign:'center',padding:32,color:'var(--color-text-secondary)' }}>Access restricted to Super Admin</div>;
+
+  const openAdd = () => { setForm({ name:'' }); setEditing(null); setModal(true); };
+  const openEdit = u => { setForm({ name:u.name }); setEditing(u.id); setModal(true); };
+  const save = async () => {
+    try { editing ? await api.put(`/units/${editing}`, form) : await api.post('/units', form); setModal(false); reload(); }
+    catch(e){ alert(e.message); }
+  };
+
+  return <>
+    <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
+      <div><div style={{ fontSize:16,fontWeight:500 }}>Units</div><div style={{ fontSize:11,color:'var(--color-text-secondary)',marginTop:2 }}>Manage the measurement units used by products</div></div>
+      <Btn variant="primary" onClick={openAdd}><i className="ti ti-plus" aria-hidden="true"/>Add unit</Btn>
+    </div>
+    <Card>
+      <DataTable
+        cols={[
+          {key:'id',label:'ID',width:90},{key:'name',label:'Unit name',wrap:true},
+          {key:'edit',label:'',width:40,render:r=><Btn size="sm" onClick={()=>openEdit(r)}><i className="ti ti-edit" aria-hidden="true"/></Btn>},
+          {key:'del',label:'',width:40,render:r=><Btn size="sm" variant="danger" onClick={async()=>{ if(window.confirm(`Delete unit "${r.name}"?`)){try{await api.del('/units/'+r.id);reload();}catch(e){alert(e.message);}}}}><i className="ti ti-trash" aria-hidden="true"/></Btn>},
+        ]}
+        rows={units} empty="No units"
+      />
+    </Card>
+    <Modal open={modal} title={editing?'Edit unit':'Add unit'} onClose={()=>setModal(false)} onSave={save}>
+      <FormRow label="Unit name"><Input value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="e.g. Box, Carton, Litre"/></FormRow>
     </Modal>
   </>;
 }
@@ -282,8 +458,6 @@ export function Projects() {
       if (sortBy === 'name') return (a.name||'').localeCompare(b.name||'');
       return 0;
     });
-
-  const selStyle = { padding:'5px 9px',border:'0.5px solid var(--color-border-secondary)',borderRadius:'var(--border-radius-md)',fontSize:12,background:'var(--color-background-primary)',color:'var(--color-text-primary)' };
 
   return <>
     <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
@@ -636,11 +810,48 @@ export function Users() {
 export function Audit() {
   const { isSA } = useAuth();
   const [logs, loading, reload] = useFetch('/audit');
+  const [userFilter, setUserFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   if (!isSA()) return <div style={{ textAlign:'center',padding:32,color:'var(--color-text-secondary)' }}>Access restricted to Super Admin</div>;
+
+  const userNames = [...new Set(logs.map(l=>l.user_name).filter(Boolean))].sort();
+  const years = yearsFrom(logs, 'timestamp');
+
+  const filtered = logs
+    .filter(l=>!userFilter || l.user_name===userFilter)
+    .filter(l=>!yearFilter || l.timestamp?.startsWith(yearFilter))
+    .filter(l=>!monthFilter || l.timestamp?.slice(5,7)===monthFilter)
+    .filter(l=>!dateFrom || l.timestamp?.slice(0,10) >= dateFrom)
+    .filter(l=>!dateTo || l.timestamp?.slice(0,10) <= dateTo);
+
+  const clearFilters = () => { setUserFilter(''); setYearFilter(''); setMonthFilter(''); setDateFrom(''); setDateTo(''); };
+  const hasFilters = userFilter||yearFilter||monthFilter||dateFrom||dateTo;
+
   return <>
     <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
       <div><div style={{ fontSize:16,fontWeight:500 }}>Audit trail</div><div style={{ fontSize:11,color:'var(--color-text-secondary)',marginTop:2 }}>Complete log of all system actions</div></div>
       <Btn onClick={reload}><i className="ti ti-refresh" aria-hidden="true"/>Refresh</Btn>
+    </div>
+    <div style={{ display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center' }}>
+      <select value={userFilter} onChange={e=>setUserFilter(e.target.value)} style={selStyle}>
+        <option value="">All users</option>
+        {userNames.map(u=><option key={u}>{u}</option>)}
+      </select>
+      <select value={yearFilter} onChange={e=>setYearFilter(e.target.value)} style={selStyle}>
+        <option value="">All years</option>
+        {years.map(y=><option key={y}>{y}</option>)}
+      </select>
+      <select value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} style={selStyle}>
+        <option value="">All months</option>
+        {MONTHS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+      </select>
+      <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="Date from" style={selStyle} />
+      <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="Date to" style={selStyle} />
+      {hasFilters && <Btn size="sm" onClick={clearFilters}><i className="ti ti-x" aria-hidden="true"/>Clear</Btn>}
+      <span style={{ fontSize:11,color:'var(--color-text-secondary)',marginLeft:4 }}>{filtered.length} record{filtered.length!==1?'s':''}</span>
     </div>
     <Card>
       <DataTable
@@ -651,7 +862,7 @@ export function Audit() {
           {key:'entity_type',label:'Entity',width:80},{key:'entity_id',label:'Ref',width:80},
           {key:'detail',label:'Detail',wrap:true},
         ]}
-        rows={logs} empty="No audit records"
+        rows={filtered} empty="No audit records match your filters"
       />
     </Card>
   </>;
@@ -789,8 +1000,6 @@ export function BatteryCollections() {
 
   const totalBatteries = filtered.reduce((s,c)=>s+Number(c.quantity||0),0);
   const byType = BATTERY_TYPES.map(t=>({ type:t, count:filtered.filter(c=>c.battery_type===t).length, qty:filtered.filter(c=>c.battery_type===t).reduce((s,c)=>s+Number(c.quantity),0) })).filter(x=>x.count>0);
-
-  const selStyle = { padding:'5px 9px',border:'0.5px solid var(--color-border-secondary)',borderRadius:'var(--border-radius-md)',fontSize:12,background:'var(--color-background-primary)',color:'var(--color-text-primary)' };
 
   return <>
     <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16 }}>
