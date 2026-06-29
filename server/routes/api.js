@@ -178,40 +178,6 @@ router.put('/categories/:id', auth, superAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Units ─────────────────────────────────────────────────────────────────
-router.get('/units', auth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM units ORDER BY name').all());
-});
-
-router.post('/units', auth, superAdmin, (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Unit name required' });
-  const id = nextId('UNT', 'units');
-  try {
-    db.prepare('INSERT INTO units (id,name,created_at) VALUES (?,?,datetime(\'now\'))').run(id, name);
-  } catch (e) { return res.status(400).json({ error: 'A unit with that name already exists' }); }
-  audit(req.user.id, req.user.name, 'Unit added', 'unit', id, name, req.ip);
-  res.status(201).json({ id });
-});
-
-router.put('/units/:id', auth, superAdmin, (req, res) => {
-  const u = db.prepare('SELECT * FROM units WHERE id=?').get(req.params.id);
-  if (!u) return res.status(404).json({ error: 'Not found' });
-  const { name } = req.body;
-  try {
-    db.prepare('UPDATE units SET name=? WHERE id=?').run(name ?? u.name, u.id);
-  } catch (e) { return res.status(400).json({ error: 'A unit with that name already exists' }); }
-  audit(req.user.id, req.user.name, 'Unit updated', 'unit', u.id, name || u.name, req.ip);
-  res.json({ success: true });
-});
-
-router.delete('/units/:id', auth, superAdmin, (req, res) => {
-  if (!db.prepare('SELECT id FROM units WHERE id=?').get(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  db.prepare('DELETE FROM units WHERE id=?').run(req.params.id);
-  audit(req.user.id, req.user.name, 'Unit deleted', 'unit', req.params.id, `Deleted ${req.params.id}`, req.ip);
-  res.json({ success: true });
-});
-
 // ── Users ─────────────────────────────────────────────────────────────────
 router.get('/users', auth, superAdmin, (req, res) => {
   res.json(db.prepare('SELECT id,name,email,role,status,invited,created_at,last_login FROM users ORDER BY created_at').all());

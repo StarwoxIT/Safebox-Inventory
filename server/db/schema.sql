@@ -26,12 +26,6 @@ CREATE TABLE IF NOT EXISTS subcategories (
   UNIQUE(category_id, name)
 );
 
-CREATE TABLE IF NOT EXISTS units (
-  id TEXT PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS products (
   id TEXT PRIMARY KEY,
   category TEXT NOT NULL,

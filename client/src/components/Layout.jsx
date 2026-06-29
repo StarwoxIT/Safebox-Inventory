@@ -127,7 +127,6 @@ export default function Layout({ children }) {
             <NavSection label="Administration" />
             <NavItem to="/approvals" icon="circle-check" label="Approvals" badge={pending.total} />
             <NavItem to="/categories" icon="tags" label="Categories" />
-            <NavItem to="/units" icon="ruler-2" label="Units" />
             <NavItem to="/users" icon="users" label="Users" />
             <NavItem to="/audit" icon="file-text" label="Audit trail" />
           </>}
