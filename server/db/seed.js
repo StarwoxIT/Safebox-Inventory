@@ -67,6 +67,16 @@ const seed = db.transaction(() => {
     (subs[id] || []).forEach((s, i) => insertSub.run(`${id}-S${i + 1}`, id, s));
   });
 
+  // ── Units ────────────────────────────────────────────────────────────────
+  const insertUnit = db.prepare(`INSERT OR IGNORE INTO units (id,name,created_at) VALUES (?,?,?)`);
+  [
+    ['UNT-001', 'Unit'],
+    ['UNT-002', 'Metre'],
+    ['UNT-003', 'Set'],
+    ['UNT-004', 'Pair'],
+    ['UNT-005', 'Roll'],
+  ].forEach(([id, name]) => insertUnit.run(id, name, now));
+
   // ── Settings ─────────────────────────────────────────────────────────────
   const insertSetting = db.prepare(`INSERT OR IGNORE INTO settings (key,value,updated_at) VALUES (?,?,?)`);
   [

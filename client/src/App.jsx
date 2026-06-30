@@ -4,8 +4,8 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import {
-  Inventory, Movements, Returns, Projects, Materials, Engineers,
-  Approvals, Categories, Users, Audit, Settings, ChangePassword,
+  Inventory, ProductDetail, Movements, Returns, Projects, Materials, Engineers,
+  Approvals, Categories, Units, Users, Audit, Settings, ChangePassword,
   BatteryCollections, ProjectCosts
 } from './pages/Pages';
 
@@ -32,6 +32,7 @@ function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
+          <Route path="/inventory/:id" element={<PrivateRoute><ProductDetail /></PrivateRoute>} />
           <Route path="/movements" element={<PrivateRoute><Movements /></PrivateRoute>} />
           <Route path="/returns" element={<PrivateRoute><Returns /></PrivateRoute>} />
           <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
@@ -39,6 +40,7 @@ function App() {
           <Route path="/engineers" element={<PrivateRoute><Engineers /></PrivateRoute>} />
           <Route path="/approvals" element={<PrivateRoute requireSA><Approvals /></PrivateRoute>} />
           <Route path="/categories" element={<PrivateRoute requireSA><Categories /></PrivateRoute>} />
+          <Route path="/units" element={<PrivateRoute requireSA><Units /></PrivateRoute>} />
           <Route path="/users" element={<PrivateRoute requireSA><Users /></PrivateRoute>} />
           <Route path="/audit" element={<PrivateRoute requireSA><Audit /></PrivateRoute>} />
           <Route path="/project-costs" element={<PrivateRoute><ProjectCosts /></PrivateRoute>} />
