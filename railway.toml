@@ -1,5 +1,0 @@
-[build]
-buildCommand = "npm run install:all && node server/db/seed.js && npm run build"
-
-[deploy]
-startCommand = "node server/index.js"
