@@ -7,6 +7,9 @@ import PasswordInput from '../components/PasswordInput';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PageHeader from '../components/PageHeader';
+import Pagination from '../components/Pagination';
+import usePagination from '../hooks/usePagination';
+import BackButton from '../components/BackButton';
 
 export default function Users() {
   const { user: currentUser } = useAuth();
@@ -75,8 +78,11 @@ export default function Users() {
     }
   };
 
+  const { page, setPage, totalPages, paginated } = usePagination(users, 10);
+
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconUsers} title="Users" subtitle="Create new team members and manage their access." />
 
       {message && <div className="alert alert-success" role="status">{message}</div>}
@@ -134,7 +140,7 @@ export default function Users() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {paginated.map((u) => (
                 <tr key={u.id}>
                   <td>{u.name}</td>
                   <td>{u.email}</td>
@@ -165,6 +171,7 @@ export default function Users() {
             </tbody>
           </table>
         )}
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
       {editingUser && (

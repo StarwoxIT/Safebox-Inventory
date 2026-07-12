@@ -4,6 +4,9 @@ import { listProducts, approveProduct } from '../api/products';
 import { listStockMovements, approveStockMovement } from '../api/stockMovements';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
+import usePagination from '../hooks/usePagination';
+import BackButton from '../components/BackButton';
 
 export default function Approvals() {
   const [products, setProducts] = useState([]);
@@ -35,10 +38,14 @@ export default function Approvals() {
     }
   };
 
+  const productsPagination = usePagination(products, 10);
+  const movementsPagination = usePagination(movements, 10);
+
   if (loading) return <div className="page-loading">Loading approvals...</div>;
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconShieldCheck} title="Approvals" subtitle="Review and approve pending products and stock movements." />
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
@@ -51,7 +58,7 @@ export default function Approvals() {
             <table className="data-table">
               <thead><tr><th>Model</th><th>Category</th><th>Unit cost</th><th></th></tr></thead>
               <tbody>
-                {products.map((p) => (
+                {productsPagination.paginated.map((p) => (
                   <tr key={p.id}>
                     <td>{p.model}</td>
                     <td>{p.category}</td>
@@ -64,6 +71,7 @@ export default function Approvals() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={productsPagination.page} totalPages={productsPagination.totalPages} onPageChange={productsPagination.setPage} />
           </div>
         )}
       </div>
@@ -77,7 +85,7 @@ export default function Approvals() {
             <table className="data-table">
               <thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Qty</th><th>Logged by</th><th></th></tr></thead>
               <tbody>
-                {movements.map((m) => (
+                {movementsPagination.paginated.map((m) => (
                   <tr key={m.id}>
                     <td>{m.date}</td>
                     <td>{m.product_name}</td>
@@ -92,6 +100,7 @@ export default function Approvals() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={movementsPagination.page} totalPages={movementsPagination.totalPages} onPageChange={movementsPagination.setPage} />
           </div>
         )}
       </div>

@@ -7,7 +7,11 @@ import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import { MONTHS, yearsFrom, filterByDate } from '../utils/dateFilters';
+import BackButton from '../components/BackButton';
 
 const emptyForm = { category: '', subcategory: '', brand: '', model: '', unit: 'Unit', min_threshold: 0, max_threshold: 100, unit_cost: 0 };
 
@@ -19,12 +23,17 @@ export default function Products() {
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sortBy, setSortBy] = useState('name');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -38,14 +47,22 @@ export default function Products() {
 
   const stockMap = Object.fromEntries(stock.map((s) => [s.id, s.current_stock]));
   const categories = [...new Set(products.map((p) => p.category))].sort();
+  const years = yearsFrom(products, 'created_at');
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const openAddModal = () => {
+    setForm(emptyForm);
+    setError('');
+    setShowAddModal(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
       await createProduct({ ...form, min_threshold: Number(form.min_threshold), max_threshold: Number(form.max_threshold), unit_cost: Number(form.unit_cost) });
+      setShowAddModal(false);
       setForm(emptyForm);
       load();
     } catch (err) {
@@ -78,7 +95,7 @@ export default function Products() {
 
   const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN' });
 
-  const filtered = products
+  const filtered = filterByDate(products, 'created_at', { dateFrom, dateTo, month: monthFilter, year: yearFilter })
     .filter((p) => !categoryFilter || p.category === categoryFilter)
     .filter((p) => !search || p.model.toLowerCase().includes(search.toLowerCase()) || (p.brand || '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -88,27 +105,32 @@ export default function Products() {
       return 0;
     });
 
+  const { page, setPage, totalPages, paginated } = usePagination(filtered, 10);
+  const hasFilters = categoryFilter || search || dateFrom || dateTo || monthFilter || yearFilter;
+
+  const clearFilters = () => {
+    setCategoryFilter('');
+    setSearch('');
+    setDateFrom('');
+    setDateTo('');
+    setMonthFilter('');
+    setYearFilter('');
+  };
+
   return (
     <div>
-      <PageHeader icon={IconBoxSeam} title="Products" subtitle="The inventory catalog used for stock and quotations." />
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
-
-      <form className="panel form-grid" onSubmit={handleSubmit}>
-        <label>Category<input name="category" value={form.category} onChange={handleChange} required /></label>
-        <label>Subcategory<input name="subcategory" value={form.subcategory} onChange={handleChange} /></label>
-        <label>Brand<input name="brand" value={form.brand} onChange={handleChange} /></label>
-        <label>Model<input name="model" value={form.model} onChange={handleChange} required /></label>
-        <label>Unit<input name="unit" value={form.unit} onChange={handleChange} /></label>
-        <label>Unit Cost<input type="number" name="unit_cost" value={form.unit_cost} onChange={handleChange} /></label>
-        <label>Min Threshold<input type="number" name="min_threshold" value={form.min_threshold} onChange={handleChange} /></label>
-        <label>Max Threshold<input type="number" name="max_threshold" value={form.max_threshold} onChange={handleChange} /></label>
-        <div className="span-2">
-          <button type="submit" className="btn btn-primary">
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
+      <PageHeader
+        icon={IconBoxSeam}
+        title="Products"
+        subtitle="The inventory catalog used for stock and quotations."
+        actions={
+          <button type="button" className="btn btn-primary" onClick={openAddModal}>
             <IconPlus size={16} /> Add Product
           </button>
-          {!isSuperAdmin && <span className="page-subtitle" style={{ marginLeft: 12 }}>New products go to Pending until a super admin approves them.</span>}
-        </div>
-      </form>
+        }
+      />
+      {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       {!loading && products.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -117,11 +139,22 @@ export default function Products() {
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search model or brand…" style={{ width: 200 }} />
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+            <option value="">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+            <option value="">All months</option>
+            {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Date added from" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Date added to" />
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="name">Sort by name</option>
             <option value="stock_desc">Highest stock</option>
             <option value="cost_desc">Highest cost</option>
           </select>
+          {hasFilters && <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}><IconX size={14} /> Clear</button>}
           <span className="page-subtitle">{filtered.length} product{filtered.length !== 1 ? 's' : ''}</span>
         </div>
       )}
@@ -129,7 +162,9 @@ export default function Products() {
       {loading ? (
         <div className="panel"><SkeletonRows rows={5} columns={5} /></div>
       ) : products.length === 0 ? (
-        <EmptyState icon={IconBoxSeam} title="No products yet" description="Add your first product above." />
+        <EmptyState icon={IconBoxSeam} title="No products yet" description="Click Add Product to create your first one." />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={IconBoxSeam} title="No products match your filters" />
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
@@ -139,7 +174,7 @@ export default function Products() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
+              {paginated.map((p) => {
                 const currentStock = stockMap[p.id];
                 const belowThreshold = currentStock !== undefined && currentStock <= p.min_threshold;
                 const lowStock = currentStock !== undefined && !belowThreshold && currentStock <= p.min_threshold * 1.2;
@@ -174,6 +209,44 @@ export default function Products() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="add-product-title">Add Product</h2>
+              <button type="button" className="icon-btn" onClick={() => setShowAddModal(false)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <form className="form-grid" onSubmit={handleSubmit}>
+              <label>Category<input name="category" value={form.category} onChange={handleChange} required /></label>
+              <label>Subcategory<input name="subcategory" value={form.subcategory} onChange={handleChange} /></label>
+              <label>Brand<input name="brand" value={form.brand} onChange={handleChange} /></label>
+              <label>Model<input name="model" value={form.model} onChange={handleChange} required /></label>
+              <label>Unit<input name="unit" value={form.unit} onChange={handleChange} /></label>
+              <label>Unit Cost<input type="number" name="unit_cost" value={form.unit_cost} onChange={handleChange} /></label>
+              <label>Min Threshold<input type="number" name="min_threshold" value={form.min_threshold} onChange={handleChange} /></label>
+              <label>Max Threshold<input type="number" name="max_threshold" value={form.max_threshold} onChange={handleChange} /></label>
+              {!isSuperAdmin && (
+                <p className="span-2 page-subtitle" style={{ margin: 0 }}>
+                  New products go to Pending until a super admin approves them.
+                </p>
+              )}
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

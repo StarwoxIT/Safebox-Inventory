@@ -3,7 +3,10 @@ import { IconPlus, IconTrash, IconTags } from '@tabler/icons-react';
 import { listCategories, createCategory, updateCategory, deleteCategory, listUnits, createUnit, deleteUnit } from '../api/categories';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import BackButton from '../components/BackButton';
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
@@ -58,6 +61,9 @@ export default function Categories() {
     }
   };
 
+  const categoriesPagination = usePagination(categories, 10);
+  const unitsPagination = usePagination(units, 10);
+
   const handleAddUnit = async (e) => {
     e.preventDefault();
     setError('');
@@ -72,6 +78,7 @@ export default function Categories() {
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconTags} title="Categories & Units" subtitle="Lookups used across the product catalog." />
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
@@ -99,7 +106,7 @@ export default function Categories() {
             <table className="data-table">
               <thead><tr><th>Name</th><th>Subcategories</th><th /></tr></thead>
               <tbody>
-                {categories.map((c) => (
+                {categoriesPagination.paginated.map((c) => (
                   <tr key={c.id}>
                     <td>{c.name}</td>
                     <td>{c.subcategories?.map((s) => s.name).join(', ') || '-'}</td>
@@ -115,6 +122,7 @@ export default function Categories() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={categoriesPagination.page} totalPages={categoriesPagination.totalPages} onPageChange={categoriesPagination.setPage} />
           </div>
         )}
         {editingCategory && (
@@ -154,7 +162,7 @@ export default function Categories() {
             <table className="data-table">
               <thead><tr><th>Name</th><th /></tr></thead>
               <tbody>
-                {units.map((u) => (
+                {unitsPagination.paginated.map((u) => (
                   <tr key={u.id}>
                     <td>{u.name}</td>
                     <td>
@@ -166,6 +174,7 @@ export default function Categories() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={unitsPagination.page} totalPages={unitsPagination.totalPages} onPageChange={unitsPagination.setPage} />
           </div>
         )}
       </div>

@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { IconPlus, IconBriefcase, IconFolderOff } from '@tabler/icons-react';
+import { IconPlus, IconBriefcase, IconFolderOff, IconX } from '@tabler/icons-react';
 import { listProjects, createProject } from '../api/projects';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import { MONTHS, yearsFrom, filterByDate } from '../utils/dateFilters';
+import BackButton from '../components/BackButton';
 
 const BUSINESS_MODEL_PAYMENT_CATEGORIES = {
   outright_purchase: ['full_payment', 'installments'],
@@ -56,6 +60,8 @@ export default function Projects() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('date_desc');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
 
   const loadProjects = () => {
     setLoading(true);
@@ -119,8 +125,36 @@ export default function Projects() {
     ? BUSINESS_MODEL_PAYMENT_CATEGORIES[form.business_model] || []
     : Object.keys(PAYMENT_CATEGORY_LABELS);
 
+  const years = yearsFrom(projects, 'created_at');
+
+  const filteredProjects = filterByDate(projects, 'created_at', { month: monthFilter, year: yearFilter })
+    .filter((p) => !statusFilter || p.status === statusFilter)
+    .filter(
+      (p) =>
+        !search ||
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.client_name || '').toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'date_desc') return (b.created_at || '').localeCompare(a.created_at || '');
+      if (sortBy === 'date_asc') return (a.created_at || '').localeCompare(b.created_at || '');
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return 0;
+    });
+
+  const { page, setPage, totalPages, paginated } = usePagination(filteredProjects, 12);
+  const hasFilters = statusFilter || search || monthFilter || yearFilter;
+
+  const clearFilters = () => {
+    setStatusFilter('');
+    setSearch('');
+    setMonthFilter('');
+    setYearFilter('');
+  };
+
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader
         icon={IconBriefcase}
         title="Projects"
@@ -211,11 +245,21 @@ export default function Projects() {
             <option value="completed">Completed</option>
             <option value="rejected">Rejected</option>
           </select>
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+            <option value="">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+            <option value="">All months</option>
+            {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="date_desc">Newest first</option>
             <option value="date_asc">Oldest first</option>
             <option value="name">Sort by name</option>
           </select>
+          {hasFilters && <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}><IconX size={14} /> Clear</button>}
+          <span className="page-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}</span>
         </div>
       )}
 
@@ -227,37 +271,28 @@ export default function Projects() {
           title="No projects yet"
           description="Create your first project to start quoting."
         />
+      ) : filteredProjects.length === 0 ? (
+        <EmptyState icon={IconFolderOff} title="No projects match your filters" />
       ) : (
-        <div className="card-grid">
-          {projects
-            .filter((p) => !statusFilter || p.status === statusFilter)
-            .filter(
-              (p) =>
-                !search ||
-                p.name.toLowerCase().includes(search.toLowerCase()) ||
-                (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-            )
-            .sort((a, b) => {
-              if (sortBy === 'date_desc') return (b.created_at || '').localeCompare(a.created_at || '');
-              if (sortBy === 'date_asc') return (a.created_at || '').localeCompare(b.created_at || '');
-              if (sortBy === 'name') return a.name.localeCompare(b.name);
-              return 0;
-            })
-            .map((project) => (
-            <Link to={`/projects/${project.id}`} className="job-card" key={project.id}>
-              <h3>{project.name}</h3>
-              <p>{project.client_name || 'No client assigned'}</p>
-              <div className="quote-option-flags">
-                <StatusBadge type="projectStatus" value={project.status} />
-                {project.business_model && <StatusBadge type="businessModel" value={project.business_model} />}
-              </div>
-              <div className="job-card-footer">
-                <span>{project.quotation_count} quote option(s)</span>
-                <span>{new Date(project.created_at).toLocaleDateString()}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="card-grid">
+            {paginated.map((project) => (
+              <Link to={`/projects/${project.id}`} className="job-card" key={project.id}>
+                <h3>{project.name}</h3>
+                <p>{project.client_name || 'No client assigned'}</p>
+                <div className="quote-option-flags">
+                  <StatusBadge type="projectStatus" value={project.status} />
+                  {project.business_model && <StatusBadge type="businessModel" value={project.business_model} />}
+                </div>
+                <div className="job-card-footer">
+                  <span>{project.quotation_count} quote option(s)</span>
+                  <span>{new Date(project.created_at).toLocaleDateString()}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAuditLog } from '../api/audit';
+import BackButton from '../components/BackButton';
 
 const PAGE_SIZE = 50;
 
@@ -7,19 +8,45 @@ function describeAction(entry) {
   const labels = {
     'auth.login': 'Logged in',
     'user.create': 'Created user',
+    'user.update': 'Updated user',
     'user.delete': 'Removed user',
-    'job.create': 'Created job',
-    'job.update': 'Updated job',
-    'job.delete': 'Deleted job',
+    'user.change_password': 'Changed password',
+    'project.create': 'Created project',
+    'project.update': 'Updated project',
+    'project.delete': 'Deleted project',
+    'project.engineer_assign': 'Assigned engineer',
+    'project.engineer_update': 'Updated engineer assignment',
+    'project.material_log': 'Logged material use',
+    'project.cost_log': 'Logged project cost',
     'quote.create': 'Created quotation option',
     'quote.update': 'Updated quotation option',
     'quote.delete': 'Deleted quotation option',
     'quote.select': 'Marked option as selected by client',
     'quote.unselect': 'Unmarked selected option',
-    'quote.payment_confirm': 'Confirmed payment',
-    'item.create': 'Created catalog item',
-    'item.update': 'Updated catalog item',
-    'item.delete': 'Deleted catalog item',
+    'product.create': 'Created product',
+    'product.update': 'Updated product',
+    'product.approved': 'Approved product',
+    'product.rejected': 'Rejected product',
+    'product.delete': 'Deleted product',
+    'stock_movement.create': 'Logged stock movement',
+    'stock_movement.approved': 'Approved stock movement',
+    'stock_movement.rejected': 'Rejected stock movement',
+    'stock_movement.delete': 'Deleted stock movement',
+    'category.create': 'Created category',
+    'category.update': 'Updated category',
+    'category.delete': 'Deleted category',
+    'unit.create': 'Created unit',
+    'unit.delete': 'Deleted unit',
+    'return.create': 'Logged return',
+    'return.update': 'Updated return',
+    'return.delete': 'Deleted return',
+    'battery_collection.create': 'Logged battery collection',
+    'battery_collection.delete': 'Deleted battery collection',
+    'payment_plan.create': 'Created payment plan',
+    'payment_milestone.pay': 'Recorded milestone payment',
+    'usage_period.create': 'Logged usage period',
+    'usage_period.pay': 'Recorded usage payment',
+    'settings.update': 'Updated settings',
     'company_profile.update': 'Updated company profile',
   };
   return labels[entry.action] || entry.action;
@@ -50,6 +77,7 @@ export default function AuditTrail() {
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <h1 className="page-title">Audit Trail</h1>
       <p className="page-subtitle">A record of every significant action taken across the system.</p>
 

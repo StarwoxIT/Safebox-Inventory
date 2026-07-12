@@ -6,7 +6,11 @@ import { listProducts } from '../api/products';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import { MONTHS, yearsFrom, filterByDate } from '../utils/dateFilters';
+import BackButton from '../components/BackButton';
 
 const MOVEMENT_TYPES = [
   'Purchase (IN)',
@@ -20,6 +24,7 @@ const MOVEMENT_TYPES = [
   'Damaged/Written Off',
   'Adjustment',
 ];
+const IN_TYPES = ['Purchase (IN)', 'Return (IN)', 'Transfer IN', 'Client Return to Stock', 'Project Return to Stock'];
 
 const emptyForm = { product_id: '', movement_type: MOVEMENT_TYPES[0], quantity: '', condition: 'New', source: '' };
 
@@ -32,6 +37,12 @@ export default function StockMovements() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc');
 
   const load = () => {
     setLoading(true);
@@ -67,8 +78,38 @@ export default function StockMovements() {
     }
   };
 
+  const years = yearsFrom(movements, 'date');
+
+  const filtered = filterByDate(movements, 'date', { dateFrom, dateTo, month: monthFilter, year: yearFilter })
+    .filter((m) => !typeFilter || m.movement_type === typeFilter)
+    .filter(
+      (m) =>
+        !search ||
+        (m.product_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (m.source || '').toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'date_desc') return (b.date || '').localeCompare(a.date || '');
+      if (sortBy === 'date_asc') return (a.date || '').localeCompare(b.date || '');
+      if (sortBy === 'qty_desc') return b.quantity - a.quantity;
+      return 0;
+    });
+
+  const { page, setPage, totalPages, paginated } = usePagination(filtered, 10);
+  const hasFilters = typeFilter || search || dateFrom || dateTo || monthFilter || yearFilter;
+
+  const clearFilters = () => {
+    setTypeFilter('');
+    setSearch('');
+    setDateFrom('');
+    setDateTo('');
+    setMonthFilter('');
+    setYearFilter('');
+  };
+
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconArrowsExchange} title="Stock Movements" subtitle="Record stock coming in, going out, or moving between projects." />
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
@@ -96,11 +137,29 @@ export default function StockMovements() {
       </form>
 
       {!loading && movements.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All types</option>
             {MOVEMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product or source…" style={{ width: 200 }} />
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+            <option value="">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+            <option value="">All months</option>
+            {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Date from" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Date to" />
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="qty_desc">Highest quantity</option>
+          </select>
+          {hasFilters && <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}><IconX size={14} /> Clear</button>}
+          <span className="page-subtitle">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
         </div>
       )}
 
@@ -108,17 +167,21 @@ export default function StockMovements() {
         <div className="panel"><SkeletonRows rows={5} columns={5} /></div>
       ) : movements.length === 0 ? (
         <EmptyState icon={IconArrowsExchange} title="No stock movements yet" />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={IconArrowsExchange} title="No movements match your filters" />
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
             <thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Qty</th><th>Status</th>{isSuperAdmin && <th />}</tr></thead>
             <tbody>
-              {movements.filter((m) => !typeFilter || m.movement_type === typeFilter).map((m) => (
+              {paginated.map((m) => (
                 <tr key={m.id}>
                   <td>{m.date}</td>
                   <td>{m.product_name}</td>
                   <td>{m.movement_type}</td>
-                  <td>{m.quantity}</td>
+                  <td style={{ color: IN_TYPES.includes(m.movement_type) ? 'var(--success)' : 'var(--danger)' }}>
+                    {IN_TYPES.includes(m.movement_type) ? '+' : '-'}{m.quantity}
+                  </td>
                   <td><StatusBadge type="approvalStatus" value={m.status} /></td>
                   {isSuperAdmin && (
                     <td style={{ display: 'flex', gap: 6 }}>
@@ -134,6 +197,7 @@ export default function StockMovements() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       )}
     </div>

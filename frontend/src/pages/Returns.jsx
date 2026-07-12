@@ -6,7 +6,10 @@ import { listProjects } from '../api/projects';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import BackButton from '../components/BackButton';
 
 const emptyForm = { return_type: 'Client Return', project_id: '', product_id: '', quantity: '', reason: '', oem: '' };
 
@@ -64,9 +67,11 @@ export default function Returns() {
 
   const filtered = returns.filter((r) => !typeFilter || r.return_type === typeFilter);
   const openOemReturns = returns.filter((r) => r.oem && !r.reconciled);
+  const { page, setPage, totalPages, paginated } = usePagination(filtered, 10);
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconRotateClockwise2} title="Returns" subtitle="Client and project returns, with OEM reconciliation tracking." />
       {error && <div className="alert alert-error" role="alert">{error}</div>}
       {openOemReturns.length > 0 && (
@@ -124,7 +129,7 @@ export default function Returns() {
           <table className="data-table">
             <thead><tr><th>Date</th><th>Type</th><th>Product</th><th>Project</th><th>Qty</th><th>Reason</th><th>OEM</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {filtered.map((r) => (
+              {paginated.map((r) => (
                 <tr key={r.id}>
                   <td>{r.date}</td>
                   <td>{r.return_type}</td>
@@ -143,6 +148,7 @@ export default function Returns() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       )}
 

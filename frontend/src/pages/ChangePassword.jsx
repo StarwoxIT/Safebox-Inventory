@@ -3,6 +3,7 @@ import { IconLock } from '@tabler/icons-react';
 import { changePassword } from '../api/auth';
 import PageHeader from '../components/PageHeader';
 import PasswordInput from '../components/PasswordInput';
+import BackButton from '../components/BackButton';
 
 export default function ChangePassword() {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -38,6 +39,7 @@ export default function ChangePassword() {
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconLock} title="Change Password" subtitle="Update your own account password." />
       {message && <div className="alert alert-success" role="status">{message}</div>}
       {error && <div className="alert alert-error" role="alert">{error}</div>}

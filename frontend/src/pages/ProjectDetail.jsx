@@ -21,6 +21,8 @@ import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import BackButton from '../components/BackButton';
+import Pagination from '../components/Pagination';
+import usePagination from '../hooks/usePagination';
 
 const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 });
 
@@ -370,6 +372,7 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
 
 function MaterialsTab({ project, products, onAdd }) {
   const [form, setForm] = useState({ product_id: '', quantity: '' });
+  const { page, setPage, totalPages, paginated } = usePagination(project.materials || [], 10);
   return (
     <div className="panel">
       <h2>Materials Used</h2>
@@ -389,11 +392,12 @@ function MaterialsTab({ project, products, onAdd }) {
           <table className="data-table">
             <thead><tr><th>Date</th><th>Product</th><th>Qty</th><th>Cost</th></tr></thead>
             <tbody>
-              {project.materials.map((m) => (
+              {paginated.map((m) => (
                 <tr key={m.id}><td>{m.date}</td><td>{m.product_name}</td><td>{m.quantity} {m.unit}</td><td>{currency.format(m.quantity * m.unit_cost)}</td></tr>
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       ) : (
         <EmptyState icon={IconBoxSeam} title="No materials logged yet" />
@@ -404,6 +408,7 @@ function MaterialsTab({ project, products, onAdd }) {
 
 function EngineersTab({ project, onAdd }) {
   const [form, setForm] = useState({ name: '', role: '' });
+  const { page, setPage, totalPages, paginated } = usePagination(project.engineers || [], 10);
   return (
     <div className="panel">
       <h2>Engineers Assigned</h2>
@@ -417,11 +422,12 @@ function EngineersTab({ project, onAdd }) {
           <table className="data-table">
             <thead><tr><th>Name</th><th>Role</th><th>Assigned</th><th>Completed</th></tr></thead>
             <tbody>
-              {project.engineers.map((e) => (
+              {paginated.map((e) => (
                 <tr key={e.id}><td>{e.name}</td><td>{e.role || '-'}</td><td>{e.date_assigned || '-'}</td><td>{e.date_completed || '-'}</td></tr>
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       ) : (
         <EmptyState icon={IconUsers} title="No engineers assigned yet" />
@@ -432,6 +438,7 @@ function EngineersTab({ project, onAdd }) {
 
 function CostsTab({ project, onAdd }) {
   const [form, setForm] = useState({ item_name: '', cost: '', notes: '' });
+  const { page, setPage, totalPages, paginated } = usePagination(project.costs || [], 10);
   return (
     <div className="panel">
       <h2>Other Project Costs</h2>
@@ -446,11 +453,12 @@ function CostsTab({ project, onAdd }) {
           <table className="data-table">
             <thead><tr><th>Item</th><th>Cost</th><th>Notes</th></tr></thead>
             <tbody>
-              {project.costs.map((c) => (
+              {paginated.map((c) => (
                 <tr key={c.id}><td>{c.item_name}</td><td>{currency.format(c.cost)}</td><td>{c.notes || '-'}</td></tr>
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       ) : (
         <EmptyState icon={IconReceipt2} title="No other costs logged yet" />

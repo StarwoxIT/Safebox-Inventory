@@ -3,6 +3,7 @@ import { IconSettings } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import { getSettings, updateSettings } from '../api/settings';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export default function Settings() {
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconSettings} title="Settings" subtitle="System preferences and configuration." />
       {message && <div className="alert alert-success" role="status">{message}</div>}
       {error && <div className="alert alert-error" role="alert">{error}</div>}

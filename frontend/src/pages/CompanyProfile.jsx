@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconUpload, IconPlus, IconTrash, IconDeviceFloppy } from '@tabler/icons-react';
 import { getCompanyProfile, updateCompanyProfile } from '../api/company';
+import BackButton from '../components/BackButton';
 
 export default function CompanyProfile() {
   const [profile, setProfile] = useState(null);
@@ -72,6 +73,7 @@ export default function CompanyProfile() {
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <h1 className="page-title">Company Profile</h1>
       <p className="page-subtitle">
         This content appears on the "Who We Are" page of every generated proposal PDF.

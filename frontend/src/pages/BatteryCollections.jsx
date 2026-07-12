@@ -3,7 +3,10 @@ import { IconPlus, IconBattery } from '@tabler/icons-react';
 import { listBatteryCollections, createBatteryCollection } from '../api/batteryCollections';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import usePagination from '../hooks/usePagination';
+import BackButton from '../components/BackButton';
 
 const BATTERY_TYPES = ['Tubular', 'Lithium (LiFePO4)', 'AGM', 'Gel', 'Lead Acid', 'Other'];
 
@@ -43,9 +46,11 @@ export default function BatteryCollections() {
     qty: filtered.filter((c) => c.battery_type === t).reduce((sum, c) => sum + Number(c.quantity || 0), 0),
     count: filtered.filter((c) => c.battery_type === t).length,
   })).filter((x) => x.count > 0);
+  const { page, setPage, totalPages, paginated } = usePagination(filtered, 10);
 
   return (
     <div>
+      <BackButton alwaysTo="/" label="Back to Dashboard" />
       <PageHeader icon={IconBattery} title="Battery Collections" subtitle="Track the tubular battery swap and upgrade programme." />
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
@@ -89,7 +94,7 @@ export default function BatteryCollections() {
           <table className="data-table">
             <thead><tr><th>Date</th><th>Type</th><th>Qty</th><th>Collected From</th><th>Notes</th></tr></thead>
             <tbody>
-              {filtered.map((c) => (
+              {paginated.map((c) => (
                 <tr key={c.id}>
                   <td>{c.date}</td>
                   <td>{c.battery_type}</td>
@@ -100,6 +105,7 @@ export default function BatteryCollections() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       )}
     </div>
