@@ -35,6 +35,7 @@ export default function StockMovements() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [error, setError] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -56,12 +57,19 @@ export default function StockMovements() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const openAddModal = () => {
+    setForm(emptyForm);
+    setError('');
+    setShowAddModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
       await createStockMovement({ ...form, quantity: Number(form.quantity) });
       setForm(emptyForm);
+      setShowAddModal(false);
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to log movement.');
@@ -110,31 +118,17 @@ export default function StockMovements() {
   return (
     <div>
       <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconArrowsExchange} title="Stock Movements" subtitle="Record stock coming in, going out, or moving between projects." />
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
-
-      <form className="panel form-grid" onSubmit={handleSubmit}>
-        <label>
-          Product
-          <select name="product_id" value={form.product_id} onChange={handleChange} required>
-            <option value="">Select product</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.model}</option>)}
-          </select>
-        </label>
-        <label>
-          Movement Type
-          <select name="movement_type" value={form.movement_type} onChange={handleChange}>
-            {MOVEMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
-        <label>Quantity<input type="number" name="quantity" min="0" step="0.01" value={form.quantity} onChange={handleChange} required /></label>
-        <label>Condition<input name="condition" value={form.condition} onChange={handleChange} /></label>
-        <label className="span-2">Source / Notes<input name="source" value={form.source} onChange={handleChange} /></label>
-        <div className="span-2">
-          <button type="submit" className="btn btn-primary"><IconPlus size={16} /> Log Movement</button>
-          {!isSuperAdmin && <span className="page-subtitle" style={{ marginLeft: 12 }}>Movements go to Pending until a super admin approves them.</span>}
-        </div>
-      </form>
+      <PageHeader
+        icon={IconArrowsExchange}
+        title="Stock Movements"
+        subtitle="Record stock coming in, going out, or moving between projects."
+        actions={
+          <button type="button" className="btn btn-primary" onClick={openAddModal}>
+            <IconPlus size={16} /> Log Movement
+          </button>
+        }
+      />
+      {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       {!loading && movements.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -198,6 +192,47 @@ export default function StockMovements() {
             </tbody>
           </table>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="log-movement-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="log-movement-title">Log Movement</h2>
+              <button type="button" className="icon-btn" onClick={() => setShowAddModal(false)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <form className="form-grid" onSubmit={handleSubmit}>
+              <label>
+                Product
+                <select name="product_id" value={form.product_id} onChange={handleChange} required>
+                  <option value="">Select product</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{p.model}</option>)}
+                </select>
+              </label>
+              <label>
+                Movement Type
+                <select name="movement_type" value={form.movement_type} onChange={handleChange}>
+                  {MOVEMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label>Quantity<input type="number" name="quantity" min="0" step="0.01" value={form.quantity} onChange={handleChange} required /></label>
+              <label>Condition<input name="condition" value={form.condition} onChange={handleChange} /></label>
+              <label className="span-2">Source / Notes<input name="source" value={form.source} onChange={handleChange} /></label>
+              {!isSuperAdmin && (
+                <p className="span-2 page-subtitle" style={{ margin: 0 }}>
+                  Movements go to Pending until a super admin approves them.
+                </p>
+              )}
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
