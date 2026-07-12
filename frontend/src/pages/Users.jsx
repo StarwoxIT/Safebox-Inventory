@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { IconTrash, IconEdit, IconUsers } from '@tabler/icons-react';
+import { IconTrash, IconEdit, IconUsers, IconPlus, IconX } from '@tabler/icons-react';
 import { register } from '../api/auth';
 import { listUsers, updateUser, deleteUser } from '../api/users';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin' });
+  const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -34,6 +35,12 @@ export default function Users() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const openAddModal = () => {
+    setForm({ name: '', email: '', password: '', role: 'admin' });
+    setError('');
+    setShowAddModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -42,6 +49,7 @@ export default function Users() {
       await register(form);
       setMessage(`User ${form.name} created successfully.`);
       setForm({ name: '', email: '', password: '', role: 'admin' });
+      setShowAddModal(false);
       loadUsers();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create user.');
@@ -83,45 +91,19 @@ export default function Users() {
   return (
     <div>
       <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconUsers} title="Users" subtitle="Create new team members and manage their access." />
+      <PageHeader
+        icon={IconUsers}
+        title="Users"
+        subtitle="Create new team members and manage their access."
+        actions={
+          <button type="button" className="btn btn-primary" onClick={openAddModal}>
+            <IconPlus size={16} /> Add User
+          </button>
+        }
+      />
 
       {message && <div className="alert alert-success" role="status">{message}</div>}
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
-
-      <form className="panel form-grid" onSubmit={handleSubmit}>
-        <label>
-          Full Name
-          <input name="name" value={form.name} onChange={handleChange} required />
-        </label>
-        <label>
-          Email
-          <input type="email" name="email" value={form.email} onChange={handleChange} required />
-        </label>
-        <label htmlFor="new-user-password">
-          Password
-          <PasswordInput
-            id="new-user-password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            required
-            minLength={6}
-            autoComplete="new-password"
-          />
-        </label>
-        <label>
-          Role
-          <select name="role" value={form.role} onChange={handleChange}>
-            <option value="admin">Admin (day-to-day access)</option>
-            <option value="super_admin">Super Admin (full access + approvals)</option>
-          </select>
-        </label>
-        <div className="span-2">
-          <button type="submit" className="btn btn-primary">
-            Create User
-          </button>
-        </div>
-      </form>
+      {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="panel">
         <h2>All Users</h2>
@@ -173,6 +155,57 @@ export default function Users() {
         )}
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
+
+      {showAddModal && (
+        <div className="dialog-overlay">
+          <div className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="add-user-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="add-user-title">Add User</h2>
+              <button type="button" className="icon-btn" onClick={() => setShowAddModal(false)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <form className="form-grid" onSubmit={handleSubmit}>
+              <label>
+                Full Name
+                <input name="name" value={form.name} onChange={handleChange} required />
+              </label>
+              <label>
+                Email
+                <input type="email" name="email" value={form.email} onChange={handleChange} required />
+              </label>
+              <label htmlFor="new-user-password">
+                Password
+                <PasswordInput
+                  id="new-user-password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+              </label>
+              <label>
+                Role
+                <select name="role" value={form.role} onChange={handleChange}>
+                  <option value="admin">Admin (day-to-day access)</option>
+                  <option value="super_admin">Super Admin (full access + approvals)</option>
+                </select>
+              </label>
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {editingUser && (
         <div className="dialog-overlay" onClick={() => setEditingUser(null)}>
