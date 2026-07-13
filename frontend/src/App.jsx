@@ -13,6 +13,9 @@ import StockMovements from './pages/StockMovements';
 import Categories from './pages/Categories';
 import Returns from './pages/Returns';
 import BatteryCollections from './pages/BatteryCollections';
+import PaymentTracker from './pages/PaymentTracker';
+import PaymentTrackerDetail from './pages/PaymentTrackerDetail';
+import PaymentUpdate from './pages/PaymentUpdate';
 import Approvals from './pages/Approvals';
 import Settings from './pages/Settings';
 import ChangePassword from './pages/ChangePassword';
@@ -46,6 +49,9 @@ export default function App() {
         <Route path="categories" element={<Categories />} />
         <Route path="returns" element={<Returns />} />
         <Route path="battery-collections" element={<BatteryCollections />} />
+        <Route path="payment-tracker" element={<PaymentTracker />} />
+        <Route path="payment-tracker/:planId" element={<PaymentTrackerDetail />} />
+        <Route path="payment-tracker/:planId/update" element={<PaymentUpdate />} />
         <Route
           path="approvals"
           element={

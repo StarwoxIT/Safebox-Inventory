@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { authenticate } = require('../middleware/auth');
+const { listDuePaymentMilestones } = require('../services/paymentService');
 
 const router = express.Router();
 
@@ -28,6 +29,19 @@ router.get('/stats', authenticate, (req, res) => {
     .prepare("SELECT COALESCE(SUM(amount_due), 0) AS total FROM usage_billing_periods WHERE status = 'pending'")
     .get().total;
   const activeEaasProjects = db.prepare("SELECT COUNT(*) AS c FROM projects WHERE status = 'active_eaas'").get().c;
+
+  const duePayments = listDuePaymentMilestones(7);
+  const duePaymentsCount = duePayments.length;
+  const duePaymentsList = duePayments.slice(0, 5).map((d) => ({
+    projectId: d.project_id,
+    projectName: d.project_name,
+    paymentPlanId: d.payment_plan_id,
+    label: d.label,
+    amount: d.amount,
+    dueDate: d.due_date,
+    daysLeft: d.daysLeft,
+    isOverdue: d.isOverdue,
+  }));
 
   const pendingApprovals =
     db.prepare("SELECT COUNT(*) AS c FROM products WHERE status = 'Pending'").get().c +
@@ -97,6 +111,8 @@ router.get('/stats', authenticate, (req, res) => {
     outstandingBalance,
     overduePendingUsage,
     activeEaasProjects,
+    duePaymentsCount,
+    duePaymentsList,
     pendingApprovals,
     totalStockValue,
     belowThreshold,

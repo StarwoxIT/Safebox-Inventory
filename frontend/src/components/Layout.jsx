@@ -8,6 +8,7 @@ import {
   IconTags,
   IconRotateClockwise2,
   IconBattery,
+  IconCashBanknote,
   IconShieldCheck,
   IconUsers,
   IconBuildingFactory2,
@@ -45,6 +46,10 @@ export default function Layout() {
     {
       label: 'Projects & Quotes',
       items: [{ to: '/projects', label: 'Projects', icon: IconBriefcase }],
+    },
+    {
+      label: 'Payments',
+      items: [{ to: '/payment-tracker', label: 'Payment Tracker', icon: IconCashBanknote }],
     },
     {
       label: 'Inventory',

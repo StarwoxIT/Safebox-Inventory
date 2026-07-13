@@ -171,9 +171,131 @@ function markUsagePeriodPaid(periodId, userId) {
   return db.prepare('SELECT * FROM usage_billing_periods WHERE id = ?').get(periodId);
 }
 
+// Builds the Payment Tracker view of a plan: computed paid/remaining totals, a
+// human status label tailored to its category, and the next amount due (if any).
+//   - pay_as_you_go: "Running" while active (no fixed schedule, so no due dates/alerts).
+//   - full_payment / installments, nothing left pending: "Paid".
+//   - full_payment, still pending: "Ongoing" (or "Overdue by N days" past due).
+//   - installments, still pending: "N weeks/months left" (or "Overdue by N days" past due).
+function buildPlanSummary(plan) {
+  const project = db.prepare('SELECT name, status AS project_status FROM projects WHERE id = ?').get(plan.project_id);
+  const today = new Date().toISOString().slice(0, 10);
+  const milestones = plan.milestones || [];
+  const usagePeriods = plan.usage_periods || [];
+
+  const paidMilestonesAmount = milestones.filter((m) => m.status === 'paid').reduce((sum, m) => sum + m.amount, 0);
+  const paidUsageAmount = usagePeriods.filter((p) => p.status === 'paid').reduce((sum, p) => sum + p.amount_due, 0);
+  const amountPaid = round2(paidMilestonesAmount + paidUsageAmount);
+
+  let amountRemaining = null;
+  let statusType;
+  let statusLabel;
+  let nextDue = null;
+  let isOverdue = false;
+  let isDueSoon = false;
+
+  if (plan.category === 'pay_as_you_go') {
+    if (plan.status === 'active') {
+      statusType = 'running';
+      statusLabel = 'Running';
+    } else {
+      statusType = plan.status;
+      statusLabel = plan.status.charAt(0).toUpperCase() + plan.status.slice(1);
+    }
+  } else {
+    amountRemaining = round2(plan.total_amount - amountPaid);
+    const pending = milestones
+      .filter((m) => m.status === 'pending')
+      .sort((a, b) => (a.due_date || '9999-99-99').localeCompare(b.due_date || '9999-99-99'));
+
+    if (pending.length === 0) {
+      statusType = 'paid';
+      statusLabel = 'Paid';
+    } else {
+      const next = pending[0];
+      nextDue = { milestoneId: next.id, label: next.label, dueDate: next.due_date, amount: next.amount };
+
+      let daysLeft = null;
+      if (next.due_date) {
+        daysLeft = Math.round((new Date(next.due_date) - new Date(today)) / 86400000);
+        isOverdue = daysLeft < 0;
+        isDueSoon = daysLeft >= 0 && daysLeft <= 7;
+      }
+
+      if (isOverdue) {
+        statusType = 'overdue';
+        const days = Math.abs(daysLeft);
+        statusLabel = `Overdue by ${days} day${days === 1 ? '' : 's'}`;
+      } else if (plan.category === 'installments' && daysLeft !== null) {
+        statusType = 'countdown';
+        if (daysLeft < 14) {
+          const weeks = Math.max(1, Math.round(daysLeft / 7));
+          statusLabel = `${weeks} week${weeks === 1 ? '' : 's'} left`;
+        } else {
+          const months = Math.max(1, Math.round(daysLeft / 30));
+          statusLabel = `${months} month${months === 1 ? '' : 's'} left`;
+        }
+      } else {
+        statusType = 'ongoing';
+        statusLabel = 'Ongoing';
+      }
+    }
+  }
+
+  return {
+    ...plan,
+    projectName: project?.name || null,
+    projectStatus: project?.project_status || null,
+    amountPaid,
+    amountRemaining,
+    statusType,
+    statusLabel,
+    nextDue,
+    isOverdue,
+    isDueSoon,
+  };
+}
+
+function getPaymentPlanSummary(planId) {
+  const plan = getPaymentPlanWithSchedule(planId);
+  if (!plan) return null;
+  return buildPlanSummary(plan);
+}
+
+function listAllPaymentPlanSummaries() {
+  const planIds = db.prepare('SELECT id FROM payment_plans ORDER BY created_at DESC').all();
+  return planIds.map((row) => getPaymentPlanSummary(row.id)).filter(Boolean);
+}
+
+// Pending milestones due within `withinDays` (including already-overdue ones), for
+// full_payment/installments plans only — used to drive the dashboard due-payment alert.
+function listDuePaymentMilestones(withinDays = 7) {
+  const rows = db
+    .prepare(
+      `SELECT pm.id, pm.label, pm.due_date, pm.amount, pp.id AS payment_plan_id, pp.category, pp.project_id, p.name AS project_name
+       FROM payment_milestones pm
+       JOIN payment_plans pp ON pp.id = pm.payment_plan_id
+       JOIN projects p ON p.id = pp.project_id
+       WHERE pm.status = 'pending' AND pp.category IN ('full_payment', 'installments') AND pm.due_date IS NOT NULL`
+    )
+    .all();
+
+  const today = new Date().toISOString().slice(0, 10);
+  return rows
+    .map((r) => {
+      const daysLeft = Math.round((new Date(r.due_date) - new Date(today)) / 86400000);
+      return { ...r, daysLeft, isOverdue: daysLeft < 0 };
+    })
+    .filter((r) => r.daysLeft <= withinDays)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
 module.exports = {
   createPaymentPlan,
   getPaymentPlanWithSchedule,
+  getPaymentPlanSummary,
+  listAllPaymentPlanSummaries,
+  listDuePaymentMilestones,
   recordMilestonePayment,
   recordUsagePeriod,
   markUsagePeriodPaid,

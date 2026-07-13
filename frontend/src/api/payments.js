@@ -1,5 +1,6 @@
 import client from './client';
 
+export const listPaymentTracker = () => client.get('/payments/tracker').then((res) => res.data);
 export const listPaymentPlansForProject = (projectId) =>
   client.get(`/payments/project/${projectId}`).then((res) => res.data);
 export const getPaymentPlan = (id) => client.get(`/payments/plan/${id}`).then((res) => res.data);

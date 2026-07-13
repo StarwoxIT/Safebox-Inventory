@@ -13,7 +13,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import { IconBriefcase, IconFileText, IconClock, IconReceipt2, IconAlertTriangle, IconBolt, IconBoxSeam } from '@tabler/icons-react';
+import { IconBriefcase, IconFileText, IconClock, IconReceipt2, IconAlertTriangle, IconBolt, IconBoxSeam, IconCashBanknote } from '@tabler/icons-react';
 import { getDashboardStats } from '../api/dashboard';
 import { getSettings } from '../api/settings';
 import PageHeader from '../components/PageHeader';
@@ -53,6 +53,7 @@ export default function Dashboard() {
     { label: 'Outstanding Balance', value: currency.format(stats.outstandingBalance), icon: IconClock },
     { label: 'Confirmed Income (Markup)', value: currency.format(stats.confirmedIncome), icon: IconReceipt2 },
     { label: 'Inventory Value', value: currency.format(stats.totalStockValue), icon: IconBoxSeam },
+    { label: 'Payments Due', value: stats.duePaymentsCount, icon: IconCashBanknote },
     { label: 'Pending Approvals', value: stats.pendingApprovals, icon: IconAlertTriangle },
     { label: 'Active EaaS Projects', value: stats.activeEaasProjects, icon: IconBolt },
   ];
@@ -92,6 +93,32 @@ export default function Dashboard() {
       {stats.openOemReturns > 0 && (
         <div className="alert alert-error" role="status">
           {stats.openOemReturns} open OEM return{stats.openOemReturns > 1 ? 's' : ''} awaiting reconciliation.
+        </div>
+      )}
+
+      {stats.duePaymentsCount > 0 && (
+        <div className="panel" style={{ borderColor: 'var(--danger)' }}>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <IconCashBanknote size={18} />
+            {stats.duePaymentsCount} payment{stats.duePaymentsCount > 1 ? 's' : ''} due within 7 days
+          </h2>
+          <ul className="activity-list">
+            {stats.duePaymentsList.map((d) => (
+              <li key={d.paymentPlanId + d.label}>
+                <StatusBadge type="paymentStatus" value={d.isOverdue ? 'pending' : 'active'} />
+                <span>
+                  <Link to={`/payment-tracker/${d.paymentPlanId}`}>{d.projectName}</Link> &ndash; {d.label}:{' '}
+                  {currency.format(d.amount)}
+                </span>
+                <span className="activity-time">
+                  {d.isOverdue ? `Overdue by ${Math.abs(d.daysLeft)} day${Math.abs(d.daysLeft) === 1 ? '' : 's'}` : `Due ${d.dueDate}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link to="/payment-tracker" className="btn btn-secondary btn-sm" style={{ marginTop: 8 }}>
+            View Payment Tracker
+          </Link>
         </div>
       )}
 

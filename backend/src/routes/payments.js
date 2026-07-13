@@ -6,15 +6,20 @@ const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
+// GET /payments/tracker -> every payment plan across all projects, with computed status
+router.get('/tracker', authenticate, (req, res) => {
+  res.json(paymentService.listAllPaymentPlanSummaries());
+});
+
 // GET /payments/project/:projectId -> all payment plans for a project (usually just one)
 router.get('/project/:projectId', authenticate, (req, res) => {
   const plans = db.prepare('SELECT id FROM payment_plans WHERE project_id = ?').all(req.params.projectId);
-  res.json(plans.map((p) => paymentService.getPaymentPlanWithSchedule(p.id)));
+  res.json(plans.map((p) => paymentService.getPaymentPlanSummary(p.id)));
 });
 
-// GET /payments/plan/:id -> a single plan with its full milestone/usage schedule
+// GET /payments/plan/:id -> a single plan with its full milestone/usage schedule + computed status
 router.get('/plan/:id', authenticate, (req, res) => {
-  const plan = paymentService.getPaymentPlanWithSchedule(req.params.id);
+  const plan = paymentService.getPaymentPlanSummary(req.params.id);
   if (!plan) {
     return res.status(404).json({ error: 'Payment plan not found.' });
   }
