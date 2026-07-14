@@ -26,7 +26,7 @@ const currency = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });
 
-const PIE_COLORS = ['#0F6E56', '#185FA5', '#BA7517', '#A32D2D', '#534AB7', '#117a65', '#b7950b'];
+const PIE_COLORS = ['#3379F3', '#1AC900', '#AFABAB', '#2560D0', '#0F8F00', '#14151A', '#7FA8F8'];
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -143,7 +143,7 @@ export default function Dashboard() {
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} angle={-25} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                 <Tooltip formatter={(v) => [v, 'Units']} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="stock" fill="#0F6E56" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="stock" fill="#3379F3" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -175,7 +175,7 @@ export default function Dashboard() {
               tickFormatter={(value) => new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value)}
             />
             <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }} />
-            <Bar dataKey="total" fill="#7a9a1f" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="total" fill="#1AC900" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
