@@ -59,13 +59,15 @@ export default function PaymentUpdate() {
 
   return (
     <div>
-      <BackButton alwaysTo={`/payment-tracker/${planId}`} label="Back to Payment Details" />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo={`/payment-tracker/${planId}`} label="Back to Payment Details" />
 
-      <div className="ph">
-        <div className="ph-heading">
-          <div>
-            <h1 className="ph-title">Update Payment — {plan.projectName}</h1>
-            <p className="ph-subtitle">{currency.format(plan.total_amount)} total</p>
+        <div className="ph">
+          <div className="ph-heading">
+            <div>
+              <h1 className="ph-title">Update Payment — {plan.projectName}</h1>
+              <p className="ph-subtitle">{currency.format(plan.total_amount)} total</p>
+            </div>
           </div>
         </div>
       </div>

@@ -38,8 +38,10 @@ export default function Settings() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconSettings} title="Settings" subtitle="System preferences and configuration." />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader icon={IconSettings} title="Settings" subtitle="System preferences and configuration." />
+      </div>
       {message && <div className="alert alert-success" role="status">{message}</div>}
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 

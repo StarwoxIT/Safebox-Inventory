@@ -117,17 +117,19 @@ export default function StockMovements() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconArrowsExchange}
-        title="Stock Movements"
-        subtitle="Record stock coming in, going out, or moving between projects."
-        actions={
-          <button type="button" className="btn btn-primary" onClick={openAddModal}>
-            <IconPlus size={16} /> Log Movement
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconArrowsExchange}
+          title="Stock Movements"
+          subtitle="Record stock coming in, going out, or moving between projects."
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
+              <IconPlus size={16} /> Log Movement
+            </button>
+          }
+        />
+      </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       {!loading && movements.length > 0 && (

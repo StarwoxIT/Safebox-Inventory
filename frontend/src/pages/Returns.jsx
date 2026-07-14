@@ -113,17 +113,19 @@ export default function Returns() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconRotateClockwise2}
-        title="Returns"
-        subtitle="Client and project returns, with OEM reconciliation tracking."
-        actions={
-          <button type="button" className="btn btn-primary" onClick={openAddModal}>
-            <IconPlus size={16} /> Log Return
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconRotateClockwise2}
+          title="Returns"
+          subtitle="Client and project returns, with OEM reconciliation tracking."
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
+              <IconPlus size={16} /> Log Return
+            </button>
+          }
+        />
+      </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
       {openOemReturns.length > 0 && (
         <div className="alert alert-error" role="status">

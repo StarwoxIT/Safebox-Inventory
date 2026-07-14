@@ -39,8 +39,10 @@ export default function ChangePassword() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconLock} title="Change Password" subtitle="Update your own account password." />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader icon={IconLock} title="Change Password" subtitle="Update your own account password." />
+      </div>
       {message && <div className="alert alert-success" role="status">{message}</div>}
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 

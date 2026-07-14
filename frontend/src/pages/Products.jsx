@@ -119,17 +119,19 @@ export default function Products() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconBoxSeam}
-        title="Products"
-        subtitle="The inventory catalog used for stock and quotations."
-        actions={
-          <button type="button" className="btn btn-primary" onClick={openAddModal}>
-            <IconPlus size={16} /> Add Product
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconBoxSeam}
+          title="Products"
+          subtitle="The inventory catalog used for stock and quotations."
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
+              <IconPlus size={16} /> Add Product
+            </button>
+          }
+        />
+      </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       {!loading && products.length > 0 && (

@@ -84,8 +84,10 @@ export default function PaymentTracker() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconCashBanknote} title="Payment Tracker" subtitle="Every payment plan across all projects, with what's paid, what's left, and what's due." />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader icon={IconCashBanknote} title="Payment Tracker" subtitle="Every payment plan across all projects, with what's paid, what's left, and what's due." />
+      </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       {!loading && plans.length > 0 && (

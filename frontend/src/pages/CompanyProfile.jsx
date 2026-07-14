@@ -73,11 +73,13 @@ export default function CompanyProfile() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <h1 className="page-title">Company Profile</h1>
-      <p className="page-subtitle">
-        This content appears on the "Who We Are" page of every generated proposal PDF.
-      </p>
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <h1 className="page-title">Company Profile</h1>
+        <p className="page-subtitle">
+          This content appears on the "Who We Are" page of every generated proposal PDF.
+        </p>
+      </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {message && <div className="alert alert-success">{message}</div>}

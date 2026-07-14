@@ -129,21 +129,21 @@ a:hover {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
   height: var(--topbar-height);
+  flex-shrink: 0;
   background: var(--brand-black);
   color: #fff;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  position: sticky;
-  top: 0;
   z-index: 20;
 }
 
@@ -218,11 +218,13 @@ a:hover {
 .app-body {
   flex: 1;
   display: flex;
-  min-height: calc(100vh - var(--topbar-height));
+  min-height: 0;
 }
 
 .sidebar {
   width: var(--sidebar-width);
+  flex-shrink: 0;
+  overflow-y: auto;
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 16px 8px;
@@ -277,8 +279,19 @@ a:hover {
 .content {
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
   padding: 24px;
   max-width: 1200px;
+}
+
+/* ── Sticky page header (back button + title) ───────────────────────── */
+.page-sticky-header {
+  position: sticky;
+  top: -24px;
+  z-index: 8;
+  background: var(--bg);
+  margin: -24px -24px 0;
+  padding: 24px 24px var(--space-2);
 }
 
 .page-title {

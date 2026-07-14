@@ -33,20 +33,22 @@ export default function PaymentTrackerDetail() {
 
   return (
     <div>
-      <BackButton alwaysTo="/payment-tracker" label="Back to Payment Tracker" />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/payment-tracker" label="Back to Payment Tracker" />
 
-      <div className="ph">
-        <div className="ph-heading">
-          <div>
-            <h1 className="ph-title">{plan.projectName}</h1>
-            <p className="ph-subtitle">
-              <Link to={`/projects/${plan.project_id}`}>View project</Link>
-            </p>
+        <div className="ph">
+          <div className="ph-heading">
+            <div>
+              <h1 className="ph-title">{plan.projectName}</h1>
+              <p className="ph-subtitle">
+                <Link to={`/projects/${plan.project_id}`}>View project</Link>
+              </p>
+            </div>
           </div>
+          <button type="button" className="btn btn-primary" onClick={() => navigate(`/payment-tracker/${planId}/update`)}>
+            <IconEdit size={16} /> Update Payment
+          </button>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => navigate(`/payment-tracker/${planId}/update`)}>
-          <IconEdit size={16} /> Update Payment
-        </button>
       </div>
 
       <div className="quote-option-flags" style={{ marginBottom: 16 }}>

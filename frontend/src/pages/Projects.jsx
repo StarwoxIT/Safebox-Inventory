@@ -154,17 +154,19 @@ export default function Projects() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconBriefcase}
-        title="Projects"
-        subtitle="Every project, from prospect through completion."
-        actions={
-          <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-            <IconPlus size={18} /> New Project
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconBriefcase}
+          title="Projects"
+          subtitle="Every project, from prospect through completion."
+          actions={
+            <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
+              <IconPlus size={18} /> New Project
+            </button>
+          }
+        />
+      </div>
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 

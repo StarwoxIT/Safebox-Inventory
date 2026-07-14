@@ -135,10 +135,12 @@ export default function QuoteEditor() {
 
   return (
     <div>
-      <BackButton fallback={`/projects/${effectiveProjectId}`} label="Back to Project" />
-      <h1 className="page-title">
-        {isEditing ? 'Edit Quotation' : 'New Quotation Option'} {project ? `- ${project.name}` : ''}
-      </h1>
+      <div className="page-sticky-header">
+        <BackButton fallback={`/projects/${effectiveProjectId}`} label="Back to Project" />
+        <h1 className="page-title">
+          {isEditing ? 'Edit Quotation' : 'New Quotation Option'} {project ? `- ${project.name}` : ''}
+        </h1>
+      </div>
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 

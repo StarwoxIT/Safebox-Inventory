@@ -95,8 +95,10 @@ export default function Categories() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconTags} title="Categories & Units" subtitle="Lookups used across the product catalog." />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader icon={IconTags} title="Categories & Units" subtitle="Lookups used across the product catalog." />
+      </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="panel">

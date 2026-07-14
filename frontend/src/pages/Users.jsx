@@ -90,17 +90,19 @@ export default function Users() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconUsers}
-        title="Users"
-        subtitle="Create new team members and manage their access."
-        actions={
-          <button type="button" className="btn btn-primary" onClick={openAddModal}>
-            <IconPlus size={16} /> Add User
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconUsers}
+          title="Users"
+          subtitle="Create new team members and manage their access."
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
+              <IconPlus size={16} /> Add User
+            </button>
+          }
+        />
+      </div>
 
       {message && <div className="alert alert-success" role="status">{message}</div>}
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}

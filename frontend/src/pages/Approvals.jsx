@@ -45,8 +45,10 @@ export default function Approvals() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader icon={IconShieldCheck} title="Approvals" subtitle="Review and approve pending products and stock movements." />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader icon={IconShieldCheck} title="Approvals" subtitle="Review and approve pending products and stock movements." />
+      </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="panel">

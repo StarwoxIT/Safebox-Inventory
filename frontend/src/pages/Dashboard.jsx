@@ -66,7 +66,9 @@ export default function Dashboard() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Portal overview across projects, quotes, inventory and payments." />
+      <div className="page-sticky-header">
+        <PageHeader title="Dashboard" subtitle="Portal overview across projects, quotes, inventory and payments." />
+      </div>
 
       <div className="stat-grid">
         {cards.map(({ label, value, icon: Icon }) => (

@@ -77,9 +77,11 @@ export default function AuditTrail() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <h1 className="page-title">Audit Trail</h1>
-      <p className="page-subtitle">A record of every significant action taken across the system.</p>
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <h1 className="page-title">Audit Trail</h1>
+        <p className="page-subtitle">A record of every significant action taken across the system.</p>
+      </div>
 
       <div className="panel">
         {loading ? (

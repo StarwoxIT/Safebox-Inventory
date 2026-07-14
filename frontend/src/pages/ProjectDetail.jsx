@@ -78,25 +78,27 @@ export default function ProjectDetail() {
 
   return (
     <div>
-      <BackButton fallback="/projects" label="Back to Projects" />
-      <PageHeader
-        title={project.name}
-        subtitle={project.client_name}
-        actions={
-          <div className="btn-group">
-            {quotes.length > 0 && (
-              <button className="btn btn-secondary" onClick={() => downloadProposalPdf(project.id)}>
-                <IconDownload size={18} /> Full Proposal PDF
-              </button>
-            )}
-            {canQuote && (
-              <Link className="btn btn-primary" to={`/projects/${project.id}/quotes/new`}>
-                <IconPlus size={18} /> New Option
-              </Link>
-            )}
-          </div>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton fallback="/projects" label="Back to Projects" />
+        <PageHeader
+          title={project.name}
+          subtitle={project.client_name}
+          actions={
+            <div className="btn-group">
+              {quotes.length > 0 && (
+                <button className="btn btn-secondary" onClick={() => downloadProposalPdf(project.id)}>
+                  <IconDownload size={18} /> Full Proposal PDF
+                </button>
+              )}
+              {canQuote && (
+                <Link className="btn btn-primary" to={`/projects/${project.id}/quotes/new`}>
+                  <IconPlus size={18} /> New Option
+                </Link>
+              )}
+            </div>
+          }
+        />
+      </div>
 
       <div className="quote-option-flags" style={{ marginBottom: 16 }}>
         <StatusBadge type="projectStatus" value={project.status} />

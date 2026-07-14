@@ -87,17 +87,19 @@ export default function BatteryCollections() {
 
   return (
     <div>
-      <BackButton alwaysTo="/" label="Back to Dashboard" />
-      <PageHeader
-        icon={IconBattery}
-        title="Battery Collections"
-        subtitle="Track the tubular battery swap and upgrade programme."
-        actions={
-          <button type="button" className="btn btn-primary" onClick={openAddModal}>
-            <IconPlus size={16} /> Log Collection
-          </button>
-        }
-      />
+      <div className="page-sticky-header">
+        <BackButton alwaysTo="/" label="Back to Dashboard" />
+        <PageHeader
+          icon={IconBattery}
+          title="Battery Collections"
+          subtitle="Track the tubular battery swap and upgrade programme."
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openAddModal}>
+              <IconPlus size={16} /> Log Collection
+            </button>
+          }
+        />
+      </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="stat-grid">

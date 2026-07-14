@@ -29,13 +29,15 @@ export default function QuoteHistory() {
 
   return (
     <div>
-      <BackButton fallback={quote ? `/projects/${quote.project_id}` : '/projects'} label="Back to Project" />
-      <h1 className="page-title">Version History</h1>
-      {quote && (
-        <p className="page-subtitle">
-          Option {quote.option_number} &mdash; {quote.title}
-        </p>
-      )}
+      <div className="page-sticky-header">
+        <BackButton fallback={quote ? `/projects/${quote.project_id}` : '/projects'} label="Back to Project" />
+        <h1 className="page-title">Version History</h1>
+        {quote && (
+          <p className="page-subtitle">
+            Option {quote.option_number} &mdash; {quote.title}
+          </p>
+        )}
+      </div>
 
       <div className="panel">
         <table className="editor-table">
