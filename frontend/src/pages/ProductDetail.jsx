@@ -37,19 +37,6 @@ export default function ProductDetail() {
       .finally(() => setLoading(false));
   }, [productId]);
 
-  if (loading) return <div className="page-loading">Loading product...</div>;
-  if (!product) {
-    return (
-      <div>
-        <div className="page-sticky-header">
-          <BackButton fallback="/products" label="Back to Products" />
-        </div>
-        <div className="alert alert-error">Product not found.</div>
-      </div>
-    );
-  }
-
-  const currentStock = stockInfo?.current_stock ?? 0;
   const years = yearsFrom(movements, 'date');
   const filteredMovements = filterByDate(movements, 'date', { dateFrom, dateTo, month: monthFilter, year: yearFilter })
     .filter(
@@ -66,6 +53,20 @@ export default function ProductDetail() {
     });
   const IN_TYPES = ['Purchase (IN)', 'Return (IN)', 'Transfer IN', 'Client Return to Stock', 'Project Return to Stock'];
   const { page, setPage, totalPages, paginated } = usePagination(filteredMovements, 10);
+
+  if (loading) return <div className="page-loading">Loading product...</div>;
+  if (!product) {
+    return (
+      <div>
+        <div className="page-sticky-header">
+          <BackButton fallback="/products" label="Back to Products" />
+        </div>
+        <div className="alert alert-error">Product not found.</div>
+      </div>
+    );
+  }
+
+  const currentStock = stockInfo?.current_stock ?? 0;
 
   return (
     <div>
