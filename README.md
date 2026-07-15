@@ -13,7 +13,7 @@ A production-grade portal unifying **inventory management**, **quotation managem
 ```
 safebox-portal/
 ├── backend/            Express API + SQLite + PDF generation
-│   └── scripts/        One-off scripts (e.g. migrate-inventory.js)
+│   └── scripts/        One-off scripts (migrate-inventory.js, migrate-schema-in-place.js)
 ├── frontend/           React (Vite) admin UI
 ├── nginx/              Reverse proxy (routes /api -> backend, / -> frontend)
 ├── docker-compose.yml  Production stack
@@ -84,7 +84,30 @@ Both platforms auto-redeploy on every push to `main` once connected — no GitHu
 
 ## Environment Variables
 
-See `backend/.env.example` and `frontend/.env.example`. Notably, `backend/.env` controls the company profile embedded in generated PDFs (`COMPANY_NAME`, `COMPANY_ADDRESS_LINES`, `COMPANY_EMAIL`, `COMPANY_PHONE`, `COMPANY_REG_NUMBER`, `COMPANY_BRAND_COLOR`) and `JWT_SECRET` (must be changed for production).
+### Backend (`backend/.env` — copy from `backend/.env.example`)
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `PORT` | No | `4000` | Port the Express API listens on. |
+| `NODE_ENV` | No | `development` | `development` or `production`. |
+| `JWT_SECRET` | **Yes, in production** | placeholder value | Signs/verifies auth tokens. Must be changed to a long random value before going live — anyone who knows the placeholder value could forge tokens. |
+| `DB_DIR` | No | `./data` (relative to `backend/`) | Directory holding `database.db`. Leave unset for local (non-Docker) dev. Docker Compose sets this to `/data`, mounted from the `safebox-db` named volume, so the database survives container rebuilds/redeploys. |
+| `FRONTEND_URL` | No | unset (CORS allows all origins) | Comma-separated list of allowed frontend origins for CORS, e.g. your Netlify URL. Leave unset in local dev. |
+| `SUPER_ADMIN_EMAIL` | No | `superadmin@safeboxenergy.com` | Email for the super admin account seeded the very first time the database is created. Has no effect on an existing, already-seeded database. |
+| `SUPER_ADMIN_PASSWORD` | No | `SafeboxAdmin@2026` | Password for that same seeded account. Change it immediately after first login in any real deployment. |
+| `COMPANY_BRAND_COLOR` | No | `#B7DC38` | Fixed brand accent color used in generated PDFs (logo files are static assets, not user-editable). |
+| `COMPANY_BRAND_COLOR_LIGHT` | No | `#EEF7D9` | Lighter tint of the brand color, used for PDF backgrounds/highlights. |
+| `CURRENCY_SYMBOL` | No | `₦` | Currency symbol used when rendering amounts in generated PDFs. |
+
+All other company profile content — name, address, mission/vision, products list, the page-2 photo, etc. — is **not** an env var; it's stored in the `company_profile` table and edited from the Company Profile settings page in the app.
+
+### Frontend (`frontend/.env` — copy from `frontend/.env.example`)
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `VITE_API_BASE_URL` | No | `/api` | Base path/URL the frontend calls for API requests. Leave as `/api` when frontend and backend are served from the same origin (nginx reverse proxy, Docker Compose). Set to the full backend URL (e.g. `https://safebox-backend.onrender.com/api`) when frontend and backend are deployed as separate services (Netlify + Render). |
+
+No new environment variables were introduced by any of the unified-portal work (projects, payments, inventory, roles, materials/stock sync) — everything added lives in the database schema, not in config. These variables are also identical to what the previous standalone inventory app used, so an existing deployment's env configuration doesn't need to change.
 
 ## Core Concepts
 
@@ -128,4 +151,15 @@ New users are created by a super admin via the Users page (`POST /api/auth/regis
 
 ## Migrating data from the legacy standalone inventory system
 
-If you're consolidating an existing standalone inventory deployment into this portal, use `backend/scripts/migrate-inventory.js` — see the comments at the top of that file for field-mapping notes (role names, project status/business model remapping, the kVA→kWp unit caveat). Always run it with `--dry-run` first against a **fresh, unseeded** database before importing for real.
+This app's `.env` / `docker-compose` / `DB_DIR` configuration is identical to the standalone inventory app's, so pointing this app at the same database file or Docker volume works at the connection level with no config changes. Schema-wise, almost every table is either byte-for-byte identical (`products`, `categories`, `subcategories`, `units`, `returns`, `battery_collections`, `project_materials`, `project_engineers`, `project_costs`, `settings`) or brand new (`quotations`, `payment_plans`, `company_profile`, ...) — new tables are created automatically and don't touch anything already in the database.
+
+Two tables — `users` and `projects` — had their `CHECK` constraints change (role/status enum values) and gained new columns, so they need one of two migration paths:
+
+- **Reusing the existing database file/volume in place:** run `node backend/scripts/migrate-schema-in-place.js --dry-run` first to see a report of what it would do, then run it again without `--dry-run` to migrate for real. It takes a timestamped backup of the database file automatically before making any change, rebuilds `users`/`projects` with the new schema, and remaps existing values (`'Super Admin'` → `super_admin`, `'Planning'` → `prospect`, etc.). It's safe to run against an already-migrated database — it detects that and does nothing.
+- **Importing into a fresh, unseeded database from an exported copy of the old one:** use `backend/scripts/migrate-inventory.js <path-to-old-db>` — see the comments at the top of that file for full field-mapping notes. Always run with `--dry-run` first.
+
+### Is existing production data safe if the new app is deployed against the same database?
+
+Yes — starting the new app doesn't delete or overwrite anything. `schema.sql` only ever uses `CREATE TABLE IF NOT EXISTS` (there is no `DROP TABLE` anywhere in the schema or migrations), and the migrations that run automatically on every boot are strictly additive/renaming — `stock_movements.condition` gets backfilled with a default value, `audit_log`'s `timestamp`/`detail` columns get renamed to `created_at`/`details` — never destructive.
+
+One thing to be aware of: until `migrate-schema-in-place.js` (or the fresh-import path above) has been run, **existing user accounts and projects will be present but not fully functional** under the new code. Existing users can still authenticate (email/password are unaffected), but their old-format role value (`'Admin'`/`'Super Admin'`) won't match the new lowercase role checks, so they'll get "Insufficient permissions" on protected actions until migrated. Existing projects will be missing the new `business_model` / `payment_category` / `client_name` / `sector` fields the new UI expects. Everything else — products, stock movements, categories, returns, battery collections — works immediately with no migration step at all, since those tables didn't change shape. Running the migration script (a few seconds, non-destructive, backs itself up first) resolves both remaining gaps.
