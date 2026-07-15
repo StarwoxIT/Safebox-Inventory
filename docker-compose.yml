@@ -1,61 +1,41 @@
-# SafeBox Energy IMS — production compose stack
-#
-# Services:
-#   app    — Node/Express API + built React SPA (internal only, behind nginx)
-#   nginx  — Reverse proxy, terminates HTTP on :80 (and :443 if you enable TLS)
-#
-# Volumes:
-#   safebox-db  — persists the SQLite database to the host across container restarts
-#
-# Usage:
-#   JWT_SECRET=$(openssl rand -hex 48) docker compose up -d --build
-#   …or put JWT_SECRET (and optional overrides) in a .env file next to this file.
-
 services:
-  app:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    image: safebox-ims:latest
-    container_name: safebox-app
+    container_name: safebox-backend
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
-      NODE_ENV: production
-      PORT: 3001
-      DB_PATH: /data/safebox.db
-      # Fail fast if the operator forgot to supply a secret in production
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (e.g. in .env)}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
-      # CORS is irrelevant when nginx proxies same-origin, but kept configurable
-      CLIENT_URL: ${CLIENT_URL:-http://localhost}
+      - DB_DIR=/data
     volumes:
       - safebox-db:/data
-    networks:
-      - safebox-net
     expose:
-      - "3001"
-    # No `ports:` mapping — only nginx is reachable from the host.
+      - "4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: safebox-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
     container_name: safebox-nginx
     restart: unless-stopped
-    depends_on:
-      - app
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      # Optional: drop TLS certificates here and uncomment the HTTPS block in default.conf
-      - ./nginx/certs:/etc/nginx/certs:ro
-    networks:
-      - safebox-net
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
 
 volumes:
   safebox-db:
-    driver: local
-
-networks:
-  safebox-net:
-    driver: bridge
