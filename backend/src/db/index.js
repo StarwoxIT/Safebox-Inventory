@@ -7,7 +7,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'database.db');
+const dbPath = path.join(dataDir, 'safebox.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
