@@ -2,6 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
+// Load .env relative to this file so db/index works whether required from
+// server.js or from a standalone script in any working directory.
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
 const dataDir = process.env.DB_DIR || path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
