@@ -11,18 +11,17 @@
  *             (normally refused, since inventory's PRD-/CAT-/MV-/... IDs would collide
  *             with anything already seeded — run this against a fresh, unseeded database).
  *
- * Notes on field mapping (see plan for full context):
+ * Notes on field mapping (verified against the actual old schema — server/db/schema.sql
+ * on the pre-unification azu/development branch):
  *  - users.role: 'Super Admin' -> 'super_admin', 'Admin' -> 'admin'. Users with no
  *    password_hash (never accepted their invite) are skipped — they can't log in anyway.
  *  - projects.status: Planning->prospect, Active->on_going, 'On Hold'->on_going,
  *    Completed->completed, Cancelled->rejected. Flagged as best-effort; review manually.
- *  - projects.business_model <- sale_type, matched case-insensitively against the 5 new
- *    business model values; unrecognized values are left null for manual follow-up.
- *  - projects.system_size_kwp <- system_size_kva: carried over as a raw number. kVA
- *    (apparent power) and kWp (peak DC power) are NOT the same unit — this is a
- *    placeholder until someone reviews/corrects actual system sizes.
- *  - payment_category is not present in the old schema and is left null on every
- *    migrated project — set it manually per project after migration.
+ *  - projects.system_size_kwp <- system_size_kwp: same column name and unit in both
+ *    schemas, carried over as-is.
+ *  - business_model and payment_category have no equivalent field in the old schema
+ *    (there is no sale_type column) and are left null on every migrated project — set
+ *    these manually per project after migration.
  */
 const path = require('path');
 const Database = require('better-sqlite3');
@@ -34,14 +33,6 @@ const STATUS_MAP = {
   'On Hold': 'on_going',
   Completed: 'completed',
   Cancelled: 'rejected',
-};
-
-const BUSINESS_MODEL_MAP = {
-  'outright purchase': 'outright_purchase',
-  eaas: 'eaas',
-  'repair service': 'repair_service',
-  'maintenance service': 'maintenance_service',
-  upgrade: 'upgrade',
 };
 
 function parseArgs() {
@@ -134,16 +125,13 @@ function main() {
   insertOrSkip('projects', projects, (p) => {
     const status = STATUS_MAP[p.status] || 'prospect';
     if (!STATUS_MAP[p.status]) warnings.push(`Project ${p.id}: unrecognized status '${p.status}', defaulted to 'prospect'.`);
-    const businessModel = BUSINESS_MODEL_MAP[(p.sale_type || '').toLowerCase()] || null;
-    if (p.sale_type && !businessModel) warnings.push(`Project ${p.id}: unrecognized sale_type '${p.sale_type}', left business_model null — set manually.`);
-    if (p.system_size_kva) warnings.push(`Project ${p.id}: system_size_kva (${p.system_size_kva}) carried over as system_size_kwp as-is — review, these are different units.`);
     const sector = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting'].includes(p.project_type) ? p.project_type : (p.project_type ? 'Other' : null);
     db.prepare(
-      `INSERT INTO projects (id, name, client_name, status, business_model, sector, manager, system_size_kwp, start_date, end_date, notes, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (id, name, client_name, status, sector, manager, system_size_kwp, start_date, end_date, notes, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      p.id, p.name, p.client || null, status, businessModel, sector,
-      p.manager || null, p.system_size_kva || 0, p.start_date || null, p.end_date || null,
+      p.id, p.name, p.client || null, status, sector,
+      p.manager || null, p.system_size_kwp || 0, p.start_date || null, p.end_date || null,
       p.notes || null, mapUserId(p.created_by), p.created_at
     );
   });
