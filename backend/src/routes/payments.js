@@ -7,18 +7,18 @@ const { logAction } = require('../services/auditService');
 const router = express.Router();
 
 // GET /payments/tracker -> every payment plan across all projects, with computed status
-router.get('/tracker', authenticate, (req, res) => {
+router.get('/tracker', authenticate, authorize('super_admin'), (req, res) => {
   res.json(paymentService.listAllPaymentPlanSummaries());
 });
 
 // GET /payments/project/:projectId -> all payment plans for a project (usually just one)
-router.get('/project/:projectId', authenticate, (req, res) => {
+router.get('/project/:projectId', authenticate, authorize('super_admin'), (req, res) => {
   const plans = db.prepare('SELECT id FROM payment_plans WHERE project_id = ?').all(req.params.projectId);
   res.json(plans.map((p) => paymentService.getPaymentPlanSummary(p.id)));
 });
 
 // GET /payments/plan/:id -> a single plan with its full milestone/usage schedule + computed status
-router.get('/plan/:id', authenticate, (req, res) => {
+router.get('/plan/:id', authenticate, authorize('super_admin'), (req, res) => {
   const plan = paymentService.getPaymentPlanSummary(req.params.id);
   if (!plan) {
     return res.status(404).json({ error: 'Payment plan not found.' });
@@ -27,7 +27,7 @@ router.get('/plan/:id', authenticate, (req, res) => {
 });
 
 // POST /payments/plans -> create a payment plan for a project's selected quotation
-router.post('/plans', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/plans', authenticate, authorize('super_admin'), (req, res) => {
   const { project_id, quotation_id, deposit_percent, installment_count, frequency } = req.body;
   if (!project_id || !quotation_id) {
     return res.status(400).json({ error: 'project_id and quotation_id are required.' });
@@ -55,7 +55,7 @@ router.post('/plans', authenticate, authorize('admin', 'super_admin'), (req, res
 });
 
 // PUT /payments/milestones/:id/pay -> record a milestone/installment as paid
-router.put('/milestones/:id/pay', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/milestones/:id/pay', authenticate, authorize('super_admin'), (req, res) => {
   try {
     const plan = paymentService.recordMilestonePayment(req.params.id, req.user.id);
     logAction({ user: req.user, action: 'payment_milestone.pay', entityType: 'payment_milestone', entityId: req.params.id });
@@ -66,7 +66,7 @@ router.put('/milestones/:id/pay', authenticate, authorize('admin', 'super_admin'
 });
 
 // POST /payments/plans/:id/usage -> log a Pay as you Go usage billing period
-router.post('/plans/:id/usage', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/plans/:id/usage', authenticate, authorize('super_admin'), (req, res) => {
   const { period_start, period_end, units_consumed, rate_per_unit } = req.body;
   if (!period_start || !period_end || units_consumed === undefined || rate_per_unit === undefined) {
     return res.status(400).json({ error: 'period_start, period_end, units_consumed and rate_per_unit are required.' });
@@ -88,7 +88,7 @@ router.post('/plans/:id/usage', authenticate, authorize('admin', 'super_admin'),
 });
 
 // PUT /payments/usage/:id/pay -> mark a usage billing period as paid
-router.put('/usage/:id/pay', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/usage/:id/pay', authenticate, authorize('super_admin'), (req, res) => {
   try {
     const period = paymentService.markUsagePeriodPaid(req.params.id, req.user.id);
     logAction({ user: req.user, action: 'usage_period.pay', entityType: 'usage_billing_period', entityId: req.params.id });

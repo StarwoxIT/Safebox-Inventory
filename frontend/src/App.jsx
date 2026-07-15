@@ -49,9 +49,30 @@ export default function App() {
         <Route path="categories" element={<Categories />} />
         <Route path="returns" element={<Returns />} />
         <Route path="battery-collections" element={<BatteryCollections />} />
-        <Route path="payment-tracker" element={<PaymentTracker />} />
-        <Route path="payment-tracker/:planId" element={<PaymentTrackerDetail />} />
-        <Route path="payment-tracker/:planId/update" element={<PaymentUpdate />} />
+        <Route
+          path="payment-tracker"
+          element={
+            <ProtectedRoute roles={['super_admin']}>
+              <PaymentTracker />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="payment-tracker/:planId"
+          element={
+            <ProtectedRoute roles={['super_admin']}>
+              <PaymentTrackerDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="payment-tracker/:planId/update"
+          element={
+            <ProtectedRoute roles={['super_admin']}>
+              <PaymentUpdate />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="approvals"
           element={

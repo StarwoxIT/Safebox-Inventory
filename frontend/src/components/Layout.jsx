@@ -48,10 +48,6 @@ export default function Layout() {
       items: [{ to: '/projects', label: 'Projects', icon: IconBriefcase }],
     },
     {
-      label: 'Payments',
-      items: [{ to: '/payment-tracker', label: 'Payment Tracker', icon: IconCashBanknote }],
-    },
-    {
       label: 'Inventory',
       items: [
         { to: '/products', label: 'Products', icon: IconBoxSeam },
@@ -62,6 +58,13 @@ export default function Layout() {
       ],
     },
   ];
+
+  if (isSuperAdmin) {
+    navGroups.splice(2, 0, {
+      label: 'Payments',
+      items: [{ to: '/payment-tracker', label: 'Payment Tracker', icon: IconCashBanknote }],
+    });
+  }
 
   const adminItems = [];
   if (isSuperAdmin) {

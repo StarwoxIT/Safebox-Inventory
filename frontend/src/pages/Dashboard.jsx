@@ -16,6 +16,7 @@ import {
 import { IconBriefcase, IconFileText, IconClock, IconReceipt2, IconAlertTriangle, IconBolt, IconBoxSeam, IconCashBanknote } from '@tabler/icons-react';
 import { getDashboardStats } from '../api/dashboard';
 import { getSettings } from '../api/settings';
+import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import { SkeletonRows } from '../components/Skeleton';
@@ -29,6 +30,8 @@ const currency = new Intl.NumberFormat(undefined, {
 const PIE_COLORS = ['#3379F3', '#1AC900', '#AFABAB', '#2560D0', '#0F8F00', '#14151A', '#7FA8F8'];
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [stats, setStats] = useState(null);
   const [settings, setSettings] = useState({});
   const [error, setError] = useState('');
@@ -50,10 +53,14 @@ export default function Dashboard() {
   const cards = [
     { label: 'Total Projects', value: stats.totalProjects, icon: IconBriefcase },
     { label: 'Total Quotes', value: stats.totalQuotes, icon: IconFileText },
-    { label: 'Outstanding Balance', value: currency.format(stats.outstandingBalance), icon: IconClock },
-    { label: 'Confirmed Income (Markup)', value: currency.format(stats.confirmedIncome), icon: IconReceipt2 },
+    ...(isSuperAdmin
+      ? [
+          { label: 'Outstanding Balance', value: currency.format(stats.outstandingBalance), icon: IconClock },
+          { label: 'Confirmed Income (Markup)', value: currency.format(stats.confirmedIncome), icon: IconReceipt2 },
+        ]
+      : []),
     { label: 'Inventory Value', value: currency.format(stats.totalStockValue), icon: IconBoxSeam },
-    { label: 'Payments Due', value: stats.duePaymentsCount, icon: IconCashBanknote },
+    ...(isSuperAdmin ? [{ label: 'Payments Due', value: stats.duePaymentsCount, icon: IconCashBanknote }] : []),
     { label: 'Pending Approvals', value: stats.pendingApprovals, icon: IconAlertTriangle },
     { label: 'Active EaaS Projects', value: stats.activeEaasProjects, icon: IconBolt },
   ];
@@ -98,7 +105,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {stats.duePaymentsCount > 0 && (
+      {isSuperAdmin && stats.duePaymentsCount > 0 && (
         <div className="panel" style={{ borderColor: 'var(--danger)' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <IconCashBanknote size={18} />

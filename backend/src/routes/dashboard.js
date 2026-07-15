@@ -14,7 +14,12 @@ router.get('/stats', authenticate, (req, res) => {
   const pendingRevenueProjection = db
     .prepare("SELECT COALESCE(SUM(grand_total), 0) AS total FROM quotations WHERE status = 'draft'")
     .get().total;
-  const confirmedIncome = db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM income_records').get().total;
+  const isSuperAdmin = req.user.role === 'super_admin';
+
+  // Payment data (balances, income, due milestones) is super-admin only — everyone else gets these zeroed out.
+  const confirmedIncome = isSuperAdmin
+    ? db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM income_records').get().total
+    : 0;
   const selectedQuotesCount = db.prepare('SELECT COUNT(*) AS c FROM quotations WHERE is_selected = 1').get().c;
 
   const projectsByStatus = db
@@ -22,15 +27,15 @@ router.get('/stats', authenticate, (req, res) => {
     .all()
     .reduce((acc, row) => ({ ...acc, [row.status]: row.c }), {});
 
-  const outstandingBalance = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payment_milestones WHERE status = 'pending'")
-    .get().total;
-  const overduePendingUsage = db
-    .prepare("SELECT COALESCE(SUM(amount_due), 0) AS total FROM usage_billing_periods WHERE status = 'pending'")
-    .get().total;
+  const outstandingBalance = isSuperAdmin
+    ? db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payment_milestones WHERE status = 'pending'").get().total
+    : 0;
+  const overduePendingUsage = isSuperAdmin
+    ? db.prepare("SELECT COALESCE(SUM(amount_due), 0) AS total FROM usage_billing_periods WHERE status = 'pending'").get().total
+    : 0;
   const activeEaasProjects = db.prepare("SELECT COUNT(*) AS c FROM projects WHERE status = 'active_eaas'").get().c;
 
-  const duePayments = listDuePaymentMilestones(7);
+  const duePayments = isSuperAdmin ? listDuePaymentMilestones(7) : [];
   const duePaymentsCount = duePayments.length;
   const duePaymentsList = duePayments.slice(0, 5).map((d) => ({
     projectId: d.project_id,

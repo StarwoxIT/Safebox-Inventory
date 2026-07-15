@@ -11,10 +11,12 @@ import {
   IconBoxSeam,
   IconReceipt2,
   IconCash,
+  IconEdit,
+  IconX,
 } from '@tabler/icons-react';
-import { getProject, downloadProposalPdf, addProjectEngineer, addProjectMaterial, addProjectCost } from '../api/projects';
+import { getProject, updateProject, downloadProposalPdf, addProjectEngineer, addProjectMaterial, addProjectCost } from '../api/projects';
 import { listQuotesForProject, downloadQuotePdf, selectQuote } from '../api/quotes';
-import { listProducts } from '../api/products';
+import { listProductStock } from '../api/products';
 import { listPaymentPlansForProject, createPaymentPlan, payMilestone, logUsagePeriod, payUsagePeriod } from '../api/payments';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
@@ -28,27 +30,74 @@ const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency:
 
 const TABS = ['Overview', 'Quotations', 'Payments', 'Materials', 'Engineers', 'Costs'];
 
+const BUSINESS_MODEL_PAYMENT_CATEGORIES = {
+  outright_purchase: ['full_payment', 'installments'],
+  eaas: ['pay_as_you_go'],
+  repair_service: ['full_payment', 'installments'],
+  maintenance_service: ['full_payment', 'installments'],
+  upgrade: ['full_payment', 'installments'],
+};
+
+const BUSINESS_MODEL_LABELS = {
+  outright_purchase: 'Outright Purchase',
+  eaas: 'EaaS',
+  repair_service: 'Repair Service',
+  maintenance_service: 'Maintenance Service',
+  upgrade: 'Upgrade',
+};
+
+const PAYMENT_CATEGORY_LABELS = {
+  full_payment: 'Full Payment',
+  installments: 'Installments',
+  pay_as_you_go: 'Pay as you Go',
+};
+
+const SECTORS = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting', 'Other'];
+
+const emptyEditForm = {
+  name: '',
+  client_name: '',
+  client_address: '',
+  client_contact: '',
+  description: '',
+  manager: '',
+  system_size_kwp: '',
+  business_model: '',
+  payment_category: '',
+  sector: '',
+};
+
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
+  const canEditProject = user?.role === 'admin' || isSuperAdmin;
   const [project, setProject] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [plans, setPlans] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [stock, setStock] = useState([]);
   const [tab, setTab] = useState('Overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState(emptyEditForm);
+  const [editError, setEditError] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([getProject(projectId), listQuotesForProject(projectId), listPaymentPlansForProject(projectId), listProducts()])
-      .then(([projectData, quotesData, plansData, productsData]) => {
+    Promise.all([
+      getProject(projectId),
+      listQuotesForProject(projectId),
+      isSuperAdmin ? listPaymentPlansForProject(projectId) : Promise.resolve([]),
+      listProductStock(),
+    ])
+      .then(([projectData, quotesData, plansData, stockData]) => {
         setProject(projectData);
         setQuotes(quotesData);
         setPlans(plansData);
-        setProducts(productsData);
+        setStock(stockData);
       })
       .catch(() => setError('Failed to load project details.'))
       .finally(() => setLoading(false));
@@ -75,6 +124,65 @@ export default function ProjectDetail() {
 
   const canQuote = project.status === 'prospect' || isSuperAdmin;
   const plan = plans[0];
+  const visibleTabs = isSuperAdmin ? TABS : TABS.filter((t) => t !== 'Payments');
+
+  const openEditModal = () => {
+    setEditForm({
+      name: project.name || '',
+      client_name: project.client_name || '',
+      client_address: project.client_address || '',
+      client_contact: project.client_contact || '',
+      description: project.description || '',
+      manager: project.manager || '',
+      system_size_kwp: project.system_size_kwp || '',
+      business_model: project.business_model || '',
+      payment_category: project.payment_category || '',
+      sector: project.sector || '',
+    });
+    setEditError('');
+    setShowEditModal(true);
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'business_model') {
+        const allowed = BUSINESS_MODEL_PAYMENT_CATEGORIES[value] || [];
+        if (!allowed.includes(prev.payment_category)) {
+          next.payment_category = allowed.length === 1 ? allowed[0] : '';
+        }
+      }
+      return next;
+    });
+  };
+
+  const canEditModelCategory = isSuperAdmin || project.status === 'prospect';
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditError('');
+    setEditSubmitting(true);
+    try {
+      await updateProject(project.id, {
+        ...editForm,
+        system_size_kwp: editForm.system_size_kwp ? Number(editForm.system_size_kwp) : 0,
+        business_model: editForm.business_model || null,
+        payment_category: editForm.payment_category || null,
+        sector: editForm.sector || null,
+      });
+      setShowEditModal(false);
+      load();
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Failed to update project.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const allowedEditPaymentCategories = editForm.business_model
+    ? BUSINESS_MODEL_PAYMENT_CATEGORIES[editForm.business_model] || []
+    : Object.keys(PAYMENT_CATEGORY_LABELS);
 
   return (
     <div>
@@ -85,6 +193,11 @@ export default function ProjectDetail() {
           subtitle={project.client_name}
           actions={
             <div className="btn-group">
+              {canEditProject && (
+                <button type="button" className="btn btn-secondary" onClick={openEditModal}>
+                  <IconEdit size={18} /> Edit
+                </button>
+              )}
               {quotes.length > 0 && (
                 <button className="btn btn-secondary" onClick={() => downloadProposalPdf(project.id)}>
                   <IconDownload size={18} /> Full Proposal PDF
@@ -109,7 +222,7 @@ export default function ProjectDetail() {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="tab-row" role="tablist">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t}
           </button>
@@ -186,7 +299,7 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {tab === 'Payments' && (
+      {tab === 'Payments' && isSuperAdmin && (
         <PaymentsTab
           project={project}
           quotes={quotes}
@@ -202,7 +315,7 @@ export default function ProjectDetail() {
       {tab === 'Materials' && (
         <MaterialsTab
           project={project}
-          products={products}
+          stock={stock}
           onAdd={(payload) => runAction('material', () => addProjectMaterial(project.id, payload))}
         />
       )}
@@ -219,6 +332,88 @@ export default function ProjectDetail() {
           project={project}
           onAdd={(payload) => runAction('cost', () => addProjectCost(project.id, payload))}
         />
+      )}
+
+      {showEditModal && (
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="edit-project-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="edit-project-title">Edit Project</h2>
+              <button type="button" className="icon-btn" onClick={() => setShowEditModal(false)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {editError && <div className="alert alert-error" role="alert">{editError}</div>}
+            <form className="form-grid" onSubmit={handleEditSubmit}>
+              <label>
+                Project Name
+                <input name="name" value={editForm.name} onChange={handleEditChange} required />
+              </label>
+              <label>
+                Client Name
+                <input name="client_name" value={editForm.client_name} onChange={handleEditChange} />
+              </label>
+              <label>
+                Client Address
+                <input name="client_address" value={editForm.client_address} onChange={handleEditChange} />
+              </label>
+              <label>
+                Client Contact
+                <input name="client_contact" value={editForm.client_contact} onChange={handleEditChange} />
+              </label>
+              <label>
+                Project Manager
+                <input name="manager" value={editForm.manager} onChange={handleEditChange} />
+              </label>
+              <label>
+                System Size (kWp)
+                <input name="system_size_kwp" type="number" min="0" step="0.1" value={editForm.system_size_kwp} onChange={handleEditChange} />
+              </label>
+              <label>
+                Sector
+                <select name="sector" value={editForm.sector} onChange={handleEditChange}>
+                  <option value="">Select sector</option>
+                  {SECTORS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <label>
+                Business Model
+                <select name="business_model" value={editForm.business_model} onChange={handleEditChange} disabled={!canEditModelCategory}>
+                  <option value="">Select business model</option>
+                  {Object.entries(BUSINESS_MODEL_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Payment Category
+                <select name="payment_category" value={editForm.payment_category} onChange={handleEditChange} disabled={!canEditModelCategory}>
+                  <option value="">Select payment category</option>
+                  {allowedEditPaymentCategories.map((value) => (
+                    <option key={value} value={value}>{PAYMENT_CATEGORY_LABELS[value]}</option>
+                  ))}
+                </select>
+              </label>
+              {!canEditModelCategory && (
+                <p className="span-2 page-subtitle" style={{ margin: 0 }}>
+                  Only a super admin can change business model or payment category once quoting has moved past prospect.
+                </p>
+              )}
+              <label className="span-2">
+                Description
+                <textarea name="description" value={editForm.description} onChange={handleEditChange} rows={3} />
+              </label>
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={editSubmitting}>
+                  {editSubmitting ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -372,22 +567,59 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
   );
 }
 
-function MaterialsTab({ project, products, onAdd }) {
+function MaterialsTab({ project, stock, onAdd }) {
   const [form, setForm] = useState({ product_id: '', quantity: '' });
+  const [formError, setFormError] = useState('');
   const { page, setPage, totalPages, paginated } = usePagination(project.materials || [], 10);
+  const inStockProducts = stock.filter((p) => p.current_stock > 0);
+  const selectedProduct = inStockProducts.find((p) => p.id === form.product_id);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setFormError('');
+    const qty = Number(form.quantity);
+    if (selectedProduct && qty > selectedProduct.current_stock) {
+      setFormError(`Only ${selectedProduct.current_stock} ${selectedProduct.unit} of ${selectedProduct.model} in stock.`);
+      return;
+    }
+    onAdd({ ...form, quantity: qty });
+    setForm({ product_id: '', quantity: '' });
+  };
+
   return (
     <div className="panel">
       <h2>Materials Used</h2>
-      <form className="form-grid" onSubmit={(e) => { e.preventDefault(); onAdd({ ...form, quantity: Number(form.quantity) }); setForm({ product_id: '', quantity: '' }); }}>
+      <form className="form-grid" onSubmit={handleSubmit}>
         <label>
           Product
-          <select required value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })}>
+          <select
+            required
+            value={form.product_id}
+            onChange={(e) => { setForm({ product_id: e.target.value, quantity: '' }); setFormError(''); }}
+          >
             <option value="">Select product</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.model}</option>)}
+            {inStockProducts.map((p) => (
+              <option key={p.id} value={p.id}>{p.model} — {p.current_stock} {p.unit} in stock</option>
+            ))}
           </select>
         </label>
-        <label>Quantity<input type="number" min="0" step="0.01" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
-        <div className="span-2"><button type="submit" className="btn btn-secondary">Log Material</button></div>
+        <label>
+          Quantity
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            max={selectedProduct?.current_stock}
+            required
+            value={form.quantity}
+            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+          />
+        </label>
+        {formError && <span className="field-error span-2">{formError}</span>}
+        {inStockProducts.length === 0 && (
+          <p className="span-2 page-subtitle" style={{ margin: 0 }}>No products currently in stock — restock before logging material use.</p>
+        )}
+        <div className="span-2"><button type="submit" className="btn btn-secondary" disabled={inStockProducts.length === 0}>Log Material</button></div>
       </form>
       {project.materials?.length > 0 ? (
         <div className="data-table-wrap">
