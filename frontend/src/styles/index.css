@@ -395,6 +395,7 @@ a:hover {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .form-grid .span-2 {
