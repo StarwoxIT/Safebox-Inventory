@@ -30,7 +30,8 @@ RUN apk add --no-cache \
     freetype \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    su-exec
 
 ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
@@ -40,10 +41,11 @@ ENV PUPPETEER_SKIP_DOWNLOAD=true \
 COPY --from=deps /app/node_modules ./node_modules
 COPY package*.json ./
 COPY src ./src
+COPY entrypoint.sh ./entrypoint.sh
 
 RUN addgroup -S app && adduser -S app -G app \
-    && mkdir -p /data && chown -R app:app /data /app
-USER app
+    && mkdir -p /data \
+    && chmod +x /app/entrypoint.sh
 
 EXPOSE 4000
-CMD ["node", "src/server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]
