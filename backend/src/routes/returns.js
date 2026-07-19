@@ -47,15 +47,26 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM returns WHERE id = ?').get(id));
 });
 
-router.put('/:id', authenticate, (req, res) => {
+router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
   const existing = db.prepare('SELECT * FROM returns WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Return not found.' });
   }
-  const { oem, sent_to_oem_date, oem_response, reconciled, notes } = req.body;
+  const {
+    date, return_type, project_id, product_id, quantity, reason,
+    oem, sent_to_oem_date, oem_response, reconciled, notes,
+  } = req.body;
   db.prepare(
-    'UPDATE returns SET oem = ?, sent_to_oem_date = ?, oem_response = ?, reconciled = ?, notes = ? WHERE id = ?'
+    `UPDATE returns SET date = ?, return_type = ?, project_id = ?, product_id = ?, quantity = ?, reason = ?,
+       oem = ?, sent_to_oem_date = ?, oem_response = ?, reconciled = ?, notes = ?
+     WHERE id = ?`
   ).run(
+    date ?? existing.date,
+    return_type ?? existing.return_type,
+    project_id !== undefined ? (project_id || null) : existing.project_id,
+    product_id ?? existing.product_id,
+    quantity ?? existing.quantity,
+    reason ?? existing.reason,
     oem ?? existing.oem,
     sent_to_oem_date ?? existing.sent_to_oem_date,
     oem_response ?? existing.oem_response,

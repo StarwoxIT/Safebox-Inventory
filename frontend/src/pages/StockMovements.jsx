@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { IconPlus, IconCheck, IconX, IconArrowsExchange } from '@tabler/icons-react';
+import { IconPlus, IconCheck, IconX, IconEdit, IconArrowsExchange } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { listStockMovements, createStockMovement, approveStockMovement } from '../api/stockMovements';
+import { listStockMovements, createStockMovement, updateStockMovement, approveStockMovement } from '../api/stockMovements';
 import { listProducts } from '../api/products';
+import { formatProductLabel } from '../utils/productLabel';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -26,7 +27,7 @@ const MOVEMENT_TYPES = [
 ];
 const IN_TYPES = ['Purchase (IN)', 'Return (IN)', 'Transfer IN', 'Client Return to Stock', 'Project Return to Stock'];
 
-const emptyForm = { product_id: '', movement_type: MOVEMENT_TYPES[0], quantity: '', condition: 'New', source: '' };
+const emptyForm = { date: new Date().toISOString().slice(0, 10), product_id: '', movement_type: MOVEMENT_TYPES[0], quantity: '', condition: 'New', source: '' };
 
 export default function StockMovements() {
   const { user } = useAuth();
@@ -44,6 +45,8 @@ export default function StockMovements() {
   const [monthFilter, setMonthFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [sortBy, setSortBy] = useState('date_desc');
+  const [editingMovement, setEditingMovement] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
 
   const load = () => {
     setLoading(true);
@@ -83,6 +86,33 @@ export default function StockMovements() {
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update approval.');
+    }
+  };
+
+  const openEdit = (m) => {
+    setEditingMovement(m);
+    setEditForm({
+      date: m.date || '',
+      product_id: m.product_id || '',
+      movement_type: m.movement_type,
+      quantity: m.quantity,
+      condition: m.condition || 'New',
+      source: m.source || '',
+    });
+    setError('');
+  };
+
+  const handleEditChange = (e) => setEditForm({ ...editForm, [e.target.name]: e.target.value });
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await updateStockMovement(editingMovement.id, { ...editForm, quantity: Number(editForm.quantity) });
+      setEditingMovement(null);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update movement.');
     }
   };
 
@@ -187,6 +217,7 @@ export default function StockMovements() {
                           <button className="icon-btn" title="Reject" aria-label="Reject" onClick={() => handleApprove(m.id, 'Rejected')}><IconX size={18} /></button>
                         </>
                       )}
+                      <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => openEdit(m)}><IconEdit size={18} /></button>
                     </td>
                   )}
                 </tr>
@@ -208,11 +239,12 @@ export default function StockMovements() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleSubmit}>
+              <label>Date<input type="date" name="date" value={form.date} onChange={handleChange} required /></label>
               <label>
                 Product
                 <select name="product_id" value={form.product_id} onChange={handleChange} required>
                   <option value="">Select product</option>
-                  {products.map((p) => <option key={p.id} value={p.id}>{p.model}</option>)}
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
                 </select>
               </label>
               <label>
@@ -231,6 +263,43 @@ export default function StockMovements() {
               )}
               <div className="span-2 dialog-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingMovement && (
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="edit-movement-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="edit-movement-title">Edit Movement</h2>
+              <button type="button" className="icon-btn" onClick={() => setEditingMovement(null)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <form className="form-grid" onSubmit={handleEditSubmit}>
+              <label>Date<input type="date" name="date" value={editForm.date} onChange={handleEditChange} required /></label>
+              <label>
+                Product
+                <select name="product_id" value={editForm.product_id} onChange={handleEditChange} required>
+                  <option value="">Select product</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
+                </select>
+              </label>
+              <label>
+                Movement Type
+                <select name="movement_type" value={editForm.movement_type} onChange={handleEditChange}>
+                  {MOVEMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label>Quantity<input type="number" name="quantity" min="0" step="0.01" value={editForm.quantity} onChange={handleEditChange} required /></label>
+              <label>Condition<input name="condition" value={editForm.condition} onChange={handleEditChange} /></label>
+              <label className="span-2">Source / Notes<input name="source" value={editForm.source} onChange={handleEditChange} /></label>
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingMovement(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save</button>
               </div>
             </form>

@@ -57,6 +57,29 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM stock_movements WHERE id = ?').get(id));
 });
 
+router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM stock_movements WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Stock movement not found.' });
+  }
+  const { date, product_id, movement_type, quantity, condition, source, notes } = req.body;
+  db.prepare(
+    `UPDATE stock_movements SET date = ?, product_id = ?, movement_type = ?, quantity = ?, condition = ?, source = ?, notes = ?
+     WHERE id = ?`
+  ).run(
+    date ?? existing.date,
+    product_id ?? existing.product_id,
+    movement_type ?? existing.movement_type,
+    quantity ?? existing.quantity,
+    condition ?? existing.condition,
+    source ?? existing.source,
+    notes ?? existing.notes,
+    req.params.id
+  );
+  logAction({ user: req.user, action: 'stock_movement.update', entityType: 'stock_movement', entityId: req.params.id });
+  res.json(db.prepare('SELECT * FROM stock_movements WHERE id = ?').get(req.params.id));
+});
+
 router.post('/:id/approve', authenticate, authorize('super_admin'), (req, res) => {
   const { decision } = req.body;
   if (!['Approved', 'Rejected'].includes(decision)) {

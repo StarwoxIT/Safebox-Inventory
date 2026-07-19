@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { IconPlus, IconBattery, IconX } from '@tabler/icons-react';
-import { listBatteryCollections, createBatteryCollection } from '../api/batteryCollections';
+import { IconPlus, IconBattery, IconEdit, IconX } from '@tabler/icons-react';
+import { useAuth } from '../context/AuthContext';
+import { listBatteryCollections, createBatteryCollection, updateBatteryCollection } from '../api/batteryCollections';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import Pagination from '../components/Pagination';
@@ -13,10 +14,14 @@ const BATTERY_TYPES = ['Tubular', 'Lithium (LiFePO4)', 'AGM', 'Gel', 'Lead Acid'
 const emptyForm = { date: new Date().toISOString().slice(0, 10), battery_type: 'Tubular', quantity: 1, collected_from: '', notes: '' };
 
 export default function BatteryCollections() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingCollection, setEditingCollection] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -52,6 +57,24 @@ export default function BatteryCollections() {
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to log collection.');
+    }
+  };
+
+  const openEdit = (c) => {
+    setEditingCollection(c);
+    setEditForm({ date: c.date || '', battery_type: c.battery_type, quantity: c.quantity, collected_from: c.collected_from || '', notes: c.notes || '' });
+    setError('');
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await updateBatteryCollection(editingCollection.id, { ...editForm, quantity: Number(editForm.quantity) });
+      setEditingCollection(null);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update collection.');
     }
   };
 
@@ -148,7 +171,7 @@ export default function BatteryCollections() {
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>Date</th><th>Type</th><th>Qty</th><th>Collected From</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Qty</th><th>Collected From</th><th>Notes</th>{isSuperAdmin && <th />}</tr></thead>
             <tbody>
               {paginated.map((c) => (
                 <tr key={c.id}>
@@ -157,6 +180,13 @@ export default function BatteryCollections() {
                   <td>{c.quantity}</td>
                   <td>{c.collected_from}</td>
                   <td>{c.notes || '-'}</td>
+                  {isSuperAdmin && (
+                    <td>
+                      <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => openEdit(c)}>
+                        <IconEdit size={18} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -188,6 +218,36 @@ export default function BatteryCollections() {
               <label className="span-2">Notes<input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
               <div className="span-2 dialog-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingCollection && (
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="edit-collection-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="edit-collection-title">Edit Collection</h2>
+              <button type="button" className="icon-btn" onClick={() => setEditingCollection(null)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
+            <form className="form-grid" onSubmit={handleEditSubmit}>
+              <label>Date<input type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} /></label>
+              <label>Quantity<input type="number" min="1" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })} /></label>
+              <label>
+                Battery Type
+                <select value={editForm.battery_type} onChange={(e) => setEditForm({ ...editForm, battery_type: e.target.value })}>
+                  {BATTERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label>Collected From<input value={editForm.collected_from} onChange={(e) => setEditForm({ ...editForm, collected_from: e.target.value })} required /></label>
+              <label className="span-2">Notes<input value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} /></label>
+              <div className="span-2 dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingCollection(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save</button>
               </div>
             </form>
