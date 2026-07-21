@@ -32,6 +32,26 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM battery_collections WHERE id = ?').get(id));
 });
 
+router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM battery_collections WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Battery collection not found.' });
+  }
+  const { date, battery_type, quantity, collected_from, notes } = req.body;
+  db.prepare(
+    'UPDATE battery_collections SET date = ?, battery_type = ?, quantity = ?, collected_from = ?, notes = ? WHERE id = ?'
+  ).run(
+    date ?? existing.date,
+    battery_type ?? existing.battery_type,
+    quantity ?? existing.quantity,
+    collected_from ?? existing.collected_from,
+    notes ?? existing.notes,
+    req.params.id
+  );
+  logAction({ user: req.user, action: 'battery_collection.update', entityType: 'battery_collection', entityId: req.params.id });
+  res.json(db.prepare('SELECT * FROM battery_collections WHERE id = ?').get(req.params.id));
+});
+
 router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {
   const result = db.prepare('DELETE FROM battery_collections WHERE id = ?').run(req.params.id);
   if (result.changes === 0) {

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { IconPlus, IconRotateClockwise2, IconEdit, IconX } from '@tabler/icons-react';
+import { useAuth } from '../context/AuthContext';
 import { listReturns, createReturn, updateReturn } from '../api/returns';
 import { listProducts } from '../api/products';
 import { listProjects } from '../api/projects';
+import { formatProductLabel } from '../utils/productLabel';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -12,9 +14,11 @@ import usePagination from '../hooks/usePagination';
 import { MONTHS, yearsFrom, filterByDate } from '../utils/dateFilters';
 import BackButton from '../components/BackButton';
 
-const emptyForm = { return_type: 'Client Return', project_id: '', product_id: '', quantity: '', reason: '', oem: '' };
+const emptyForm = { date: new Date().toISOString().slice(0, 10), return_type: 'Client Return', project_id: '', product_id: '', quantity: '', reason: '', oem: '' };
 
 export default function Returns() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [returns, setReturns] = useState([]);
   const [products, setProducts] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -30,7 +34,10 @@ export default function Returns() {
   const [yearFilter, setYearFilter] = useState('');
   const [sortBy, setSortBy] = useState('date_desc');
   const [editingReturn, setEditingReturn] = useState(null);
-  const [editForm, setEditForm] = useState({ oem: '', sent_to_oem_date: '', oem_response: '', reconciled: false });
+  const [editForm, setEditForm] = useState({
+    date: '', return_type: 'Client Return', project_id: '', product_id: '', quantity: '', reason: '',
+    oem: '', sent_to_oem_date: '', oem_response: '', reconciled: false,
+  });
 
   const load = () => {
     setLoading(true);
@@ -65,14 +72,26 @@ export default function Returns() {
 
   const openEdit = (r) => {
     setEditingReturn(r);
-    setEditForm({ oem: r.oem || '', sent_to_oem_date: r.sent_to_oem_date || '', oem_response: r.oem_response || '', reconciled: Boolean(r.reconciled) });
+    setEditForm({
+      date: r.date || '',
+      return_type: r.return_type || 'Client Return',
+      project_id: r.project_id || '',
+      product_id: r.product_id || '',
+      quantity: r.quantity,
+      reason: r.reason || '',
+      oem: r.oem || '',
+      sent_to_oem_date: r.sent_to_oem_date || '',
+      oem_response: r.oem_response || '',
+      reconciled: Boolean(r.reconciled),
+    });
+    setError('');
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      await updateReturn(editingReturn.id, editForm);
+      await updateReturn(editingReturn.id, { ...editForm, quantity: Number(editForm.quantity), project_id: editForm.project_id || null });
       setEditingReturn(null);
       load();
     } catch (err) {
@@ -134,6 +153,17 @@ export default function Returns() {
       )}
 
       {!loading && returns.length > 0 && (
+        <div className="stat-grid">
+          <div className="stat-card"><div><div className="stat-value">{filtered.length}</div><div className="stat-label">Total returns</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filtered.filter((r) => r.return_type === 'Client Return').length}</div><div className="stat-label">Client returns</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filtered.filter((r) => r.return_type === 'Project Return').length}</div><div className="stat-label">Project returns</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filtered.reduce((sum, r) => sum + Number(r.quantity || 0), 0)}</div><div className="stat-label">Total quantity</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filtered.filter((r) => r.oem && !r.reconciled).length}</div><div className="stat-label">Open OEM returns</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filtered.filter((r) => r.reconciled).length}</div><div className="stat-label">Reconciled</div></div></div>
+        </div>
+      )}
+
+      {!loading && returns.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All types</option>
@@ -170,7 +200,7 @@ export default function Returns() {
       ) : (
         <div className="panel data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>Date</th><th>Type</th><th>Product</th><th>Project</th><th>Qty</th><th>Reason</th><th>OEM</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Product</th><th>Project</th><th>Qty</th><th>Reason</th><th>OEM</th><th>Status</th>{isSuperAdmin && <th />}</tr></thead>
             <tbody>
               {paginated.map((r) => (
                 <tr key={r.id}>
@@ -182,11 +212,13 @@ export default function Returns() {
                   <td>{r.reason}</td>
                   <td>{r.oem || '-'}</td>
                   <td>{r.reconciled ? <StatusBadge type="paymentStatus" value="paid" /> : r.oem ? <StatusBadge type="paymentStatus" value="pending" /> : '-'}</td>
-                  <td>
-                    <button className="icon-btn" title="Update reconciliation" aria-label="Update reconciliation" onClick={() => openEdit(r)}>
-                      <IconEdit size={18} />
-                    </button>
-                  </td>
+                  {isSuperAdmin && (
+                    <td>
+                      <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => openEdit(r)}>
+                        <IconEdit size={18} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -206,6 +238,7 @@ export default function Returns() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleSubmit}>
+              <label>Date<input type="date" name="date" value={form.date} onChange={handleChange} required /></label>
               <label>
                 Return Type
                 <select name="return_type" value={form.return_type} onChange={handleChange}>
@@ -224,7 +257,7 @@ export default function Returns() {
                 Product
                 <select name="product_id" value={form.product_id} onChange={handleChange} required>
                   <option value="">Select product</option>
-                  {products.map((p) => <option key={p.id} value={p.id}>{p.model}</option>)}
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
                 </select>
               </label>
               <label>Quantity<input type="number" name="quantity" min="0" step="0.01" value={form.quantity} onChange={handleChange} required /></label>
@@ -240,11 +273,41 @@ export default function Returns() {
       )}
 
       {editingReturn && (
-        <div className="dialog-overlay" onClick={() => setEditingReturn(null)}>
-          <div className="dialog-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <h2 className="dialog-title">Update return / reconciliation</h2>
+        <div className="dialog-overlay">
+          <div className="dialog-card wide" role="dialog" aria-modal="true" aria-labelledby="edit-return-title">
+            <div className="dialog-header-row">
+              <h2 className="dialog-title" id="edit-return-title">Edit Return</h2>
+              <button type="button" className="icon-btn" onClick={() => setEditingReturn(null)} aria-label="Close">
+                <IconX size={18} />
+              </button>
+            </div>
+            {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleEditSubmit}>
-              <label>OEM<input value={editForm.oem} onChange={(e) => setEditForm({ ...editForm, oem: e.target.value })} /></label>
+              <label>Date<input type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} required /></label>
+              <label>
+                Return Type
+                <select value={editForm.return_type} onChange={(e) => setEditForm({ ...editForm, return_type: e.target.value })}>
+                  <option value="Client Return">Client Return</option>
+                  <option value="Project Return">Project Return</option>
+                </select>
+              </label>
+              <label>
+                Project (optional)
+                <select value={editForm.project_id} onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}>
+                  <option value="">None</option>
+                  {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Product
+                <select value={editForm.product_id} onChange={(e) => setEditForm({ ...editForm, product_id: e.target.value })} required>
+                  <option value="">Select product</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
+                </select>
+              </label>
+              <label>Quantity<input type="number" min="0" step="0.01" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })} required /></label>
+              <label>OEM / Manufacturer<input value={editForm.oem} onChange={(e) => setEditForm({ ...editForm, oem: e.target.value })} placeholder="Leave blank if not OEM" /></label>
+              <label className="span-2">Reason<input value={editForm.reason} onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })} required /></label>
               <label>Date Sent to OEM<input type="date" value={editForm.sent_to_oem_date} onChange={(e) => setEditForm({ ...editForm, sent_to_oem_date: e.target.value })} /></label>
               <label className="span-2">OEM Response<input value={editForm.oem_response} onChange={(e) => setEditForm({ ...editForm, oem_response: e.target.value })} /></label>
               <label className="span-2" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

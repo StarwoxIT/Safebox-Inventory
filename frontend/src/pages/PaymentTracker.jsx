@@ -70,6 +70,32 @@ export default function PaymentTracker() {
       return 0;
     });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const paymentStats = filtered.reduce(
+    (acc, p) => {
+      acc.totalProjectAmount += p.total_amount || 0;
+
+      const pendingMilestones = (p.milestones || []).filter((m) => m.status === 'pending');
+      const pendingUsage = (p.usage_periods || []).filter((u) => u.status === 'pending');
+      acc.totalOutstanding += pendingMilestones.reduce((sum, m) => sum + m.amount, 0);
+      acc.totalOutstanding += pendingUsage.reduce((sum, u) => sum + u.amount_due, 0);
+
+      pendingMilestones.forEach((m) => {
+        if (!m.due_date) return;
+        const daysLeft = Math.round((new Date(m.due_date) - new Date(today)) / 86400000);
+        if (daysLeft < 0) {
+          acc.totalFailed += m.amount;
+          acc.totalDue += m.amount;
+        } else if (daysLeft <= 7) {
+          acc.totalDue += m.amount;
+        }
+      });
+
+      return acc;
+    },
+    { totalProjectAmount: 0, totalOutstanding: 0, totalDue: 0, totalFailed: 0 }
+  );
+
   const { page, setPage, totalPages, paginated } = usePagination(filtered, 10);
   const hasFilters = categoryFilter || statusFilter || dateFrom || dateTo || monthFilter || yearFilter;
 
@@ -89,6 +115,15 @@ export default function PaymentTracker() {
         <PageHeader icon={IconCashBanknote} title="Payment Tracker" subtitle="Every payment plan across all projects, with what's paid, what's left, and what's due." />
       </div>
       {error && <div className="alert alert-error" role="alert">{error}</div>}
+
+      {!loading && plans.length > 0 && (
+        <div className="stat-grid">
+          <div className="stat-card"><div><div className="stat-value">{currency.format(paymentStats.totalProjectAmount)}</div><div className="stat-label">Total project amount</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{currency.format(paymentStats.totalOutstanding)}</div><div className="stat-label">Total outstanding payment</div></div></div>
+          <div className="stat-card"><div><div className="stat-value" style={{ color: paymentStats.totalDue > 0 ? 'var(--danger)' : undefined }}>{currency.format(paymentStats.totalDue)}</div><div className="stat-label">Total due payments</div></div></div>
+          <div className="stat-card"><div><div className="stat-value" style={{ color: paymentStats.totalFailed > 0 ? 'var(--danger)' : undefined }}>{currency.format(paymentStats.totalFailed)}</div><div className="stat-label">Total failed (overdue) payments</div></div></div>
+        </div>
+      )}
 
       {!loading && plans.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>

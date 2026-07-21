@@ -18,6 +18,7 @@ import { getProject, updateProject, downloadProposalPdf, addProjectEngineer, add
 import { listQuotesForProject, downloadQuotePdf, selectQuote } from '../api/quotes';
 import { listProductStock } from '../api/products';
 import { listPaymentPlansForProject, createPaymentPlan, payMilestone, logUsagePeriod, payUsagePeriod } from '../api/payments';
+import { formatProductLabel } from '../utils/productLabel';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
@@ -599,7 +600,7 @@ function MaterialsTab({ project, stock, onAdd }) {
           >
             <option value="">Select product</option>
             {inStockProducts.map((p) => (
-              <option key={p.id} value={p.id}>{p.model} — {p.current_stock} {p.unit} in stock</option>
+              <option key={p.id} value={p.id}>{formatProductLabel(p)} — {p.current_stock} {p.unit} in stock</option>
             ))}
           </select>
         </label>

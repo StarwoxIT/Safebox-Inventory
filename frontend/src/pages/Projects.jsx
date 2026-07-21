@@ -170,6 +170,15 @@ export default function Projects() {
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
+      {!loading && projects.length > 0 && (
+        <div className="stat-grid">
+          <div className="stat-card"><div><div className="stat-value">{filteredProjects.length}</div><div className="stat-label">Total projects</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'prospect').length}</div><div className="stat-label">Prospects</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'on_going' || p.status === 'active_eaas').length}</div><div className="stat-label">Active / On-going</div></div></div>
+          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'completed').length}</div><div className="stat-label">Completed</div></div></div>
+        </div>
+      )}
+
       {showForm && (
         <form className="panel form-grid" onSubmit={handleSubmit} noValidate>
           <label className={fieldErrors.name ? 'has-error' : ''}>
