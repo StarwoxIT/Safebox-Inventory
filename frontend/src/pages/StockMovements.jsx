@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { IconPlus, IconCheck, IconX, IconEdit, IconArrowsExchange } from '@tabler/icons-react';
+import { IconPlus, IconCheck, IconX, IconEdit, IconTrash, IconArrowsExchange } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { listStockMovements, createStockMovement, updateStockMovement, approveStockMovement } from '../api/stockMovements';
+import { listStockMovements, createStockMovement, updateStockMovement, deleteStockMovement, approveStockMovement } from '../api/stockMovements';
 import { listProducts } from '../api/products';
 import { formatProductLabel } from '../utils/productLabel';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import ConfirmDialog from '../components/ConfirmDialog';
 import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
 import usePagination from '../hooks/usePagination';
@@ -47,6 +48,7 @@ export default function StockMovements() {
   const [sortBy, setSortBy] = useState('date_desc');
   const [editingMovement, setEditingMovement] = useState(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -113,6 +115,22 @@ export default function StockMovements() {
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update movement.');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setError('');
+    try {
+      await deleteStockMovement(pendingDelete.id);
+      // Current stock is always computed fresh from the remaining movements, so
+      // reloading here is all the "reconciliation" removing this entry needs —
+      // whatever quantity it added or removed drops out of that calculation immediately.
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete movement.');
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -218,6 +236,7 @@ export default function StockMovements() {
                         </>
                       )}
                       <button className="icon-btn" title="Edit" aria-label="Edit" onClick={() => openEdit(m)}><IconEdit size={18} /></button>
+                      <button className="icon-btn" title="Delete" aria-label="Delete" onClick={() => setPendingDelete(m)}><IconTrash size={18} /></button>
                     </td>
                   )}
                 </tr>
@@ -244,7 +263,7 @@ export default function StockMovements() {
                 Product
                 <select name="product_id" value={form.product_id} onChange={handleChange} required>
                   <option value="">Select product</option>
-                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p, { includeId: true })}</option>)}
                 </select>
               </label>
               <label>
@@ -286,7 +305,7 @@ export default function StockMovements() {
                 Product
                 <select name="product_id" value={editForm.product_id} onChange={handleEditChange} required>
                   <option value="">Select product</option>
-                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p)}</option>)}
+                  {products.map((p) => <option key={p.id} value={p.id}>{formatProductLabel(p, { includeId: true })}</option>)}
                 </select>
               </label>
               <label>
@@ -306,6 +325,16 @@ export default function StockMovements() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Delete movement?"
+        body={`This will permanently remove this ${pendingDelete?.movement_type} entry for ${pendingDelete?.product_name} (${pendingDelete ? Math.abs(pendingDelete.quantity) : ''}). Current stock will be recalculated immediately.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

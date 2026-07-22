@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconTrash, IconEdit, IconBoxSeam, IconCheck, IconX } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import { listProducts, listProductStock, createProduct, updateProduct, approveProduct, deleteProduct } from '../api/products';
+import { listCategories } from '../api/categories';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -22,6 +23,7 @@ export default function Products() {
 
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -39,8 +41,8 @@ export default function Products() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([listProducts(), listProductStock()])
-      .then(([p, s]) => { setProducts(p); setStock(s); })
+    Promise.all([listProducts(), listProductStock(), listCategories()])
+      .then(([p, s, c]) => { setProducts(p); setStock(s); setCategoryOptions(c); })
       .catch(() => setError('Failed to load products.'))
       .finally(() => setLoading(false));
   };
@@ -51,7 +53,19 @@ export default function Products() {
   const categories = [...new Set(products.map((p) => p.category))].sort();
   const years = yearsFrom(products, 'created_at');
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const subcategoriesFor = (categoryName) =>
+    categoryOptions.find((c) => c.name === categoryName)?.subcategories || [];
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'category' && !subcategoriesFor(value).some((s) => s.name === prev.subcategory)) {
+        next.subcategory = '';
+      }
+      return next;
+    });
+  };
 
   const openAddModal = () => {
     setForm(emptyForm);
@@ -98,7 +112,16 @@ export default function Products() {
     setError('');
   };
 
-  const handleEditChange = (e) => setEditForm({ ...editForm, [e.target.name]: e.target.value });
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'category' && !subcategoriesFor(value).some((s) => s.name === prev.subcategory)) {
+        next.subcategory = '';
+      }
+      return next;
+    });
+  };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -209,7 +232,7 @@ export default function Products() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Model</th><th>Category</th><th>Stock</th><th>Unit Cost</th><th>Status</th>{isSuperAdmin && <th />}
+                <th>ID</th><th>Model</th><th>Category</th><th>Stock</th><th>Unit Cost</th><th>Status</th>{isSuperAdmin && <th />}
               </tr>
             </thead>
             <tbody>
@@ -219,6 +242,7 @@ export default function Products() {
                 const lowStock = currentStock !== undefined && !belowThreshold && currentStock <= p.min_threshold * 1.2;
                 return (
                   <tr key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{ cursor: 'pointer' }}>
+                    <td>{p.id}</td>
                     <td>{p.model}{p.brand ? ` (${p.brand})` : ''}</td>
                     <td>{p.category}{p.subcategory ? ` / ${p.subcategory}` : ''}</td>
                     <td style={{ color: belowThreshold ? 'var(--danger)' : lowStock ? '#a15c00' : undefined }}>
@@ -266,8 +290,24 @@ export default function Products() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleSubmit}>
-              <label>Category<input name="category" value={form.category} onChange={handleChange} required /></label>
-              <label>Subcategory<input name="subcategory" value={form.subcategory} onChange={handleChange} /></label>
+              <label>
+                Product ID
+                <input value="Auto-generated on save" disabled />
+              </label>
+              <label>
+                Category
+                <select name="category" value={form.category} onChange={handleChange} required>
+                  <option value="">Select category</option>
+                  {categoryOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Subcategory
+                <select name="subcategory" value={form.subcategory} onChange={handleChange} disabled={!form.category}>
+                  <option value="">Select subcategory</option>
+                  {subcategoriesFor(form.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </label>
               <label>Brand<input name="brand" value={form.brand} onChange={handleChange} /></label>
               <label>Model<input name="model" value={form.model} onChange={handleChange} required /></label>
               <label>Unit<input name="unit" value={form.unit} onChange={handleChange} /></label>
@@ -303,8 +343,24 @@ export default function Products() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleEditSubmit}>
-              <label>Category<input name="category" value={editForm.category} onChange={handleEditChange} required /></label>
-              <label>Subcategory<input name="subcategory" value={editForm.subcategory} onChange={handleEditChange} /></label>
+              <label>
+                Product ID
+                <input value={editingProduct.id} disabled />
+              </label>
+              <label>
+                Category
+                <select name="category" value={editForm.category} onChange={handleEditChange} required>
+                  <option value="">Select category</option>
+                  {categoryOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Subcategory
+                <select name="subcategory" value={editForm.subcategory} onChange={handleEditChange} disabled={!editForm.category}>
+                  <option value="">Select subcategory</option>
+                  {subcategoriesFor(editForm.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </label>
               <label>Brand<input name="brand" value={editForm.brand} onChange={handleEditChange} /></label>
               <label>Model<input name="model" value={editForm.model} onChange={handleEditChange} required /></label>
               <label>Unit<input name="unit" value={editForm.unit} onChange={handleEditChange} /></label>
