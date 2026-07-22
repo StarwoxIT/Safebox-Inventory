@@ -7,3 +7,5 @@ export const updateProduct = (id, payload) => client.put(`/products/${id}`, payl
 export const approveProduct = (id, decision) =>
   client.post(`/products/${id}/approve`, { decision }).then((res) => res.data);
 export const deleteProduct = (id) => client.delete(`/products/${id}`).then((res) => res.data);
+export const previewProductIdNormalization = () => client.get('/products/normalize-ids/preview').then((res) => res.data);
+export const applyProductIdNormalization = () => client.post('/products/normalize-ids').then((res) => res.data);

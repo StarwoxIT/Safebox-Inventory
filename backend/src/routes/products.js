@@ -4,6 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
 const { isApprovalRequired } = require('../services/settingsService');
+const { previewProductIdMapping, applyProductIdMapping } = require('../services/productIdService');
 
 const router = express.Router();
 
@@ -26,6 +27,27 @@ router.get('/stock', authenticate, (req, res) => {
     )
     .all();
   res.json(stock);
+});
+
+// Preview/apply a one-time fix for products whose id predates nextId('PRD','products')
+// (e.g. rows carried over from an older seed/import) so every product ends up with a
+// proper sequential PRD-XXX id. Restricted to super_admin since it rewrites the primary
+// key of existing records (and every table that references it) in place.
+router.get('/normalize-ids/preview', authenticate, authorize('super_admin'), (req, res) => {
+  res.json({ mapping: previewProductIdMapping() });
+});
+
+router.post('/normalize-ids', authenticate, authorize('super_admin'), (req, res) => {
+  const { mapping, backupPath } = applyProductIdMapping();
+  if (mapping.length > 0) {
+    logAction({
+      user: req.user,
+      action: 'product.normalize_ids',
+      entityType: 'product',
+      details: { count: mapping.length, backupPath },
+    });
+  }
+  res.json({ mapping, backupPath });
 });
 
 router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {

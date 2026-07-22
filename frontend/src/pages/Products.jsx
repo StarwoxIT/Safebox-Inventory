@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconTrash, IconEdit, IconBoxSeam, IconCheck, IconX } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { listProducts, listProductStock, createProduct, updateProduct, approveProduct, deleteProduct } from '../api/products';
+import {
+  listProducts,
+  listProductStock,
+  createProduct,
+  updateProduct,
+  approveProduct,
+  deleteProduct,
+  previewProductIdNormalization,
+  applyProductIdNormalization,
+} from '../api/products';
 import { listCategories } from '../api/categories';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
@@ -38,6 +47,9 @@ export default function Products() {
   const [dateTo, setDateTo] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
+  const [idMapping, setIdMapping] = useState([]);
+  const [showNormalizeModal, setShowNormalizeModal] = useState(false);
+  const [normalizing, setNormalizing] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -48,6 +60,28 @@ export default function Products() {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    previewProductIdNormalization()
+      .then(({ mapping }) => setIdMapping(mapping))
+      .catch(() => {});
+  }, [isSuperAdmin, products.length]);
+
+  const handleNormalizeIds = async () => {
+    setNormalizing(true);
+    setError('');
+    try {
+      await applyProductIdNormalization();
+      setShowNormalizeModal(false);
+      setIdMapping([]);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to normalize product IDs.');
+    } finally {
+      setNormalizing(false);
+    }
+  };
 
   const stockMap = Object.fromEntries(stock.map((s) => [s.id, s.current_stock]));
   const categories = [...new Set(products.map((p) => p.category))].sort();
@@ -194,6 +228,15 @@ export default function Products() {
       </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
+      {isSuperAdmin && idMapping.length > 0 && (
+        <div className="alert alert-warning" role="alert" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>{idMapping.length} product{idMapping.length !== 1 ? 's' : ''} still use{idMapping.length === 1 ? 's' : ''} a legacy ID instead of the PRD-XXX format.</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowNormalizeModal(true)}>
+            Fix Product IDs
+          </button>
+        </div>
+      )}
+
       {!loading && products.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
@@ -302,9 +345,9 @@ export default function Products() {
                 </select>
               </label>
               <label>
-                Subcategory
+                Sub-Category
                 <select name="subcategory" value={form.subcategory} onChange={handleChange} disabled={!form.category}>
-                  <option value="">Select subcategory</option>
+                  <option value="">Select sub-category</option>
                   {subcategoriesFor(form.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
               </label>
@@ -355,9 +398,9 @@ export default function Products() {
                 </select>
               </label>
               <label>
-                Subcategory
+                Sub-Category
                 <select name="subcategory" value={editForm.subcategory} onChange={handleEditChange} disabled={!editForm.category}>
-                  <option value="">Select subcategory</option>
+                  <option value="">Select sub-category</option>
                   {subcategoriesFor(editForm.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
               </label>
@@ -389,6 +432,40 @@ export default function Products() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
+
+      {showNormalizeModal && (
+        <div className="dialog-overlay" onClick={() => !normalizing && setShowNormalizeModal(false)}>
+          <div className="dialog-card" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h2 className="dialog-title">Fix Product IDs</h2>
+            <p className="dialog-body">
+              The database is backed up automatically before anything changes. Every reference to these products
+              (stock movements, returns, project materials, quotation items) is updated to match.
+            </p>
+            <div className="data-table-wrap" style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <table className="data-table">
+                <thead><tr><th>Current ID</th><th>New ID</th><th>Product</th></tr></thead>
+                <tbody>
+                  {idMapping.map((m) => (
+                    <tr key={m.oldId}>
+                      <td>{m.oldId}</td>
+                      <td>{m.newId}</td>
+                      <td>{[m.brand, m.model].filter(Boolean).join(' ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="dialog-actions" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowNormalizeModal(false)} disabled={normalizing}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleNormalizeIds} disabled={normalizing}>
+                {normalizing ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

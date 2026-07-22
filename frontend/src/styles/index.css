@@ -498,6 +498,16 @@ textarea:focus {
   background: rgba(30, 142, 62, 0.15);
 }
 
+.alert-warning {
+  background: #fef7e0;
+  color: #a15c00;
+}
+
+[data-theme='dark'] .alert-warning {
+  background: rgba(161, 92, 0, 0.15);
+  color: #f2b13d;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
