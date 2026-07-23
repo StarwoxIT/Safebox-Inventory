@@ -67,7 +67,7 @@ export default function Categories() {
       setEditingCategory(null);
       load();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update subcategories.');
+      setError(err.response?.data?.error || 'Failed to update sub-categories.');
     }
   };
 
@@ -115,14 +115,14 @@ export default function Categories() {
         ) : (
           <div className="data-table-wrap">
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Subcategories</th><th /></tr></thead>
+              <thead><tr><th>Name</th><th>Sub-Categories</th><th /></tr></thead>
               <tbody>
                 {categoriesPagination.paginated.map((c) => (
                   <tr key={c.id}>
                     <td>{c.name}</td>
                     <td>{c.subcategories?.map((s) => s.name).join(', ') || '-'}</td>
                     <td style={{ display: 'flex', gap: 4 }}>
-                      <button className="icon-btn" title="Edit subcategories" aria-label="Edit subcategories" onClick={() => openEditSubs(c)}>
+                      <button className="icon-btn" title="Edit sub-categories" aria-label="Edit sub-categories" onClick={() => openEditSubs(c)}>
                         <IconPlus size={18} />
                       </button>
                       <button className="icon-btn" title="Delete" aria-label="Delete category" onClick={() => deleteCategory(c.id).then(load)}>
@@ -139,10 +139,10 @@ export default function Categories() {
         {editingCategory && (
           <div className="dialog-overlay" onClick={() => setEditingCategory(null)}>
             <div className="dialog-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-              <h2 className="dialog-title">Subcategories for {editingCategory.name}</h2>
+              <h2 className="dialog-title">Sub-Categories for {editingCategory.name}</h2>
               <form onSubmit={handleSaveSubs}>
                 <label>
-                  Subcategories (comma-separated)
+                  Sub-Categories (comma-separated)
                   <textarea value={editSubs} onChange={(e) => setEditSubs(e.target.value)} rows={3} style={{ width: '100%' }} />
                 </label>
                 <div className="dialog-actions" style={{ marginTop: 12 }}>
@@ -169,7 +169,7 @@ export default function Categories() {
                   <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} required />
                 </label>
                 <label>
-                  Subcategories (comma-separated)
+                  Sub-Categories (comma-separated)
                   <input value={categorySubs} onChange={(e) => setCategorySubs(e.target.value)} placeholder="e.g. Lithium (LiFePO4), Lead Acid (AGM), Gel" />
                 </label>
                 <div className="span-2 dialog-actions">

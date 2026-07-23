@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconPlus, IconTrash, IconEdit, IconBoxSeam, IconCheck, IconX } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { listProducts, listProductStock, createProduct, updateProduct, approveProduct, deleteProduct } from '../api/products';
+import {
+  listProducts,
+  listProductStock,
+  createProduct,
+  updateProduct,
+  approveProduct,
+  deleteProduct,
+  previewProductIdNormalization,
+  applyProductIdNormalization,
+} from '../api/products';
+import { listCategories } from '../api/categories';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -22,6 +32,7 @@ export default function Products() {
 
   const [products, setProducts] = useState([]);
   const [stock, setStock] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -36,22 +47,59 @@ export default function Products() {
   const [dateTo, setDateTo] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
+  const [idMapping, setIdMapping] = useState([]);
+  const [showNormalizeModal, setShowNormalizeModal] = useState(false);
+  const [normalizing, setNormalizing] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([listProducts(), listProductStock()])
-      .then(([p, s]) => { setProducts(p); setStock(s); })
+    Promise.all([listProducts(), listProductStock(), listCategories()])
+      .then(([p, s, c]) => { setProducts(p); setStock(s); setCategoryOptions(c); })
       .catch(() => setError('Failed to load products.'))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, []);
 
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    previewProductIdNormalization()
+      .then(({ mapping }) => setIdMapping(mapping))
+      .catch(() => {});
+  }, [isSuperAdmin, products.length]);
+
+  const handleNormalizeIds = async () => {
+    setNormalizing(true);
+    setError('');
+    try {
+      await applyProductIdNormalization();
+      setShowNormalizeModal(false);
+      setIdMapping([]);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to normalize product IDs.');
+    } finally {
+      setNormalizing(false);
+    }
+  };
+
   const stockMap = Object.fromEntries(stock.map((s) => [s.id, s.current_stock]));
   const categories = [...new Set(products.map((p) => p.category))].sort();
   const years = yearsFrom(products, 'created_at');
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const subcategoriesFor = (categoryName) =>
+    categoryOptions.find((c) => c.name === categoryName)?.subcategories || [];
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'category' && !subcategoriesFor(value).some((s) => s.name === prev.subcategory)) {
+        next.subcategory = '';
+      }
+      return next;
+    });
+  };
 
   const openAddModal = () => {
     setForm(emptyForm);
@@ -98,7 +146,16 @@ export default function Products() {
     setError('');
   };
 
-  const handleEditChange = (e) => setEditForm({ ...editForm, [e.target.name]: e.target.value });
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'category' && !subcategoriesFor(value).some((s) => s.name === prev.subcategory)) {
+        next.subcategory = '';
+      }
+      return next;
+    });
+  };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -171,6 +228,15 @@ export default function Products() {
       </div>
       {error && !showAddModal && <div className="alert alert-error" role="alert">{error}</div>}
 
+      {isSuperAdmin && idMapping.length > 0 && (
+        <div className="alert alert-warning" role="alert" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>{idMapping.length} product{idMapping.length !== 1 ? 's' : ''} still use{idMapping.length === 1 ? 's' : ''} a legacy ID instead of the PRD-XXX format.</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowNormalizeModal(true)}>
+            Fix Product IDs
+          </button>
+        </div>
+      )}
+
       {!loading && products.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
@@ -209,7 +275,7 @@ export default function Products() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Model</th><th>Category</th><th>Stock</th><th>Unit Cost</th><th>Status</th>{isSuperAdmin && <th />}
+                <th>ID</th><th>Model</th><th>Category</th><th>Stock</th><th>Unit Cost</th><th>Status</th>{isSuperAdmin && <th />}
               </tr>
             </thead>
             <tbody>
@@ -219,6 +285,7 @@ export default function Products() {
                 const lowStock = currentStock !== undefined && !belowThreshold && currentStock <= p.min_threshold * 1.2;
                 return (
                   <tr key={p.id} onClick={() => navigate(`/products/${p.id}`)} style={{ cursor: 'pointer' }}>
+                    <td>{p.id}</td>
                     <td>{p.model}{p.brand ? ` (${p.brand})` : ''}</td>
                     <td>{p.category}{p.subcategory ? ` / ${p.subcategory}` : ''}</td>
                     <td style={{ color: belowThreshold ? 'var(--danger)' : lowStock ? '#a15c00' : undefined }}>
@@ -266,8 +333,24 @@ export default function Products() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleSubmit}>
-              <label>Category<input name="category" value={form.category} onChange={handleChange} required /></label>
-              <label>Subcategory<input name="subcategory" value={form.subcategory} onChange={handleChange} /></label>
+              <label>
+                Product ID
+                <input value="Auto-generated on save" disabled />
+              </label>
+              <label>
+                Category
+                <select name="category" value={form.category} onChange={handleChange} required>
+                  <option value="">Select category</option>
+                  {categoryOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Sub-Category
+                <select name="subcategory" value={form.subcategory} onChange={handleChange} disabled={!form.category}>
+                  <option value="">Select sub-category</option>
+                  {subcategoriesFor(form.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </label>
               <label>Brand<input name="brand" value={form.brand} onChange={handleChange} /></label>
               <label>Model<input name="model" value={form.model} onChange={handleChange} required /></label>
               <label>Unit<input name="unit" value={form.unit} onChange={handleChange} /></label>
@@ -303,8 +386,24 @@ export default function Products() {
             </div>
             {error && <div className="alert alert-error" role="alert">{error}</div>}
             <form className="form-grid" onSubmit={handleEditSubmit}>
-              <label>Category<input name="category" value={editForm.category} onChange={handleEditChange} required /></label>
-              <label>Subcategory<input name="subcategory" value={editForm.subcategory} onChange={handleEditChange} /></label>
+              <label>
+                Product ID
+                <input value={editingProduct.id} disabled />
+              </label>
+              <label>
+                Category
+                <select name="category" value={editForm.category} onChange={handleEditChange} required>
+                  <option value="">Select category</option>
+                  {categoryOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+              <label>
+                Sub-Category
+                <select name="subcategory" value={editForm.subcategory} onChange={handleEditChange} disabled={!editForm.category}>
+                  <option value="">Select sub-category</option>
+                  {subcategoriesFor(editForm.category).map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </label>
               <label>Brand<input name="brand" value={editForm.brand} onChange={handleEditChange} /></label>
               <label>Model<input name="model" value={editForm.model} onChange={handleEditChange} required /></label>
               <label>Unit<input name="unit" value={editForm.unit} onChange={handleEditChange} /></label>
@@ -333,6 +432,40 @@ export default function Products() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
+
+      {showNormalizeModal && (
+        <div className="dialog-overlay" onClick={() => !normalizing && setShowNormalizeModal(false)}>
+          <div className="dialog-card" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h2 className="dialog-title">Fix Product IDs</h2>
+            <p className="dialog-body">
+              The database is backed up automatically before anything changes. Every reference to these products
+              (stock movements, returns, project materials, quotation items) is updated to match.
+            </p>
+            <div className="data-table-wrap" style={{ maxHeight: 260, overflowY: 'auto' }}>
+              <table className="data-table">
+                <thead><tr><th>Current ID</th><th>New ID</th><th>Product</th></tr></thead>
+                <tbody>
+                  {idMapping.map((m) => (
+                    <tr key={m.oldId}>
+                      <td>{m.oldId}</td>
+                      <td>{m.newId}</td>
+                      <td>{[m.brand, m.model].filter(Boolean).join(' ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="dialog-actions" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowNormalizeModal(false)} disabled={normalizing}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleNormalizeIds} disabled={normalizing}>
+                {normalizing ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
