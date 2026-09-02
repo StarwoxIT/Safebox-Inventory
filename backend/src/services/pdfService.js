@@ -1,5 +1,7 @@
 const puppeteer = require('puppeteer');
 const { buildQuotationHtml, buildProposalHtml } = require('../templates/quotationTemplate');
+const { buildStockMovementReportHtml, buildProductReportHtml } = require('../templates/reportTemplate');
+const { buildDocumentHtml } = require('../templates/documentTemplate');
 const { getCompanyProfile } = require('./companyService');
 
 let browserPromise = null;
@@ -30,7 +32,7 @@ async function getBrowser() {
   return browserPromise;
 }
 
-async function renderHtmlToPdf(html) {
+async function renderHtmlToPdf(html, pdfOptions = {}) {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -42,6 +44,7 @@ async function renderHtmlToPdf(html) {
       format: 'A4',
       printBackground: true,
       margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' },
+      ...pdfOptions,
     });
     return pdfBuffer;
   } finally {
@@ -57,6 +60,23 @@ function renderProposalPdf(job, quotations) {
   return renderHtmlToPdf(buildProposalHtml(job, quotations, getCompanyProfile()));
 }
 
+const reportPdfOptions = {
+  landscape: true,
+  margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' },
+};
+
+function renderStockMovementReportPdf(report) {
+  return renderHtmlToPdf(buildStockMovementReportHtml(report, getCompanyProfile()), reportPdfOptions);
+}
+
+function renderProductReportPdf(report) {
+  return renderHtmlToPdf(buildProductReportHtml(report, getCompanyProfile()), reportPdfOptions);
+}
+
+function renderDocumentPdf(doc) {
+  return renderHtmlToPdf(buildDocumentHtml(doc, getCompanyProfile()));
+}
+
 async function closeBrowser() {
   if (browserPromise) {
     const browser = await browserPromise;
@@ -65,4 +85,11 @@ async function closeBrowser() {
   }
 }
 
-module.exports = { renderQuotationPdf, renderProposalPdf, closeBrowser };
+module.exports = {
+  renderQuotationPdf,
+  renderProposalPdf,
+  renderStockMovementReportPdf,
+  renderProductReportPdf,
+  renderDocumentPdf,
+  closeBrowser,
+};

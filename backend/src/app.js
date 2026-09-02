@@ -17,6 +17,8 @@ const dashboardRoutes = require('./routes/dashboard');
 const companyRoutes = require('./routes/company');
 const userRoutes = require('./routes/users');
 const auditRoutes = require('./routes/audit');
+const reportRoutes = require('./routes/reports');
+const documentRoutes = require('./routes/documents');
 
 const app = express();
 
@@ -45,6 +47,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/documents', documentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });

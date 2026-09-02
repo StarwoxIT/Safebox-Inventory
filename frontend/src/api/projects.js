@@ -5,6 +5,10 @@ export const getProject = (id) => client.get(`/projects/${id}`).then((res) => re
 export const createProject = (payload) => client.post('/projects', payload).then((res) => res.data);
 export const updateProject = (id, payload) => client.put(`/projects/${id}`, payload).then((res) => res.data);
 export const deleteProject = (id) => client.delete(`/projects/${id}`).then((res) => res.data);
+export const requestDeleteProject = (id) => client.post(`/projects/${id}/request-delete`).then((res) => res.data);
+export const cancelDeleteProjectRequest = (id) => client.post(`/projects/${id}/cancel-delete-request`).then((res) => res.data);
+export const approveDeleteProject = (id, decision) =>
+  client.post(`/projects/${id}/approve-delete`, { decision }).then((res) => res.data);
 
 export const addProjectEngineer = (projectId, payload) =>
   client.post(`/projects/${projectId}/engineers`, payload).then((res) => res.data);
