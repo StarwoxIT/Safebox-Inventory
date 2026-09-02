@@ -6,7 +6,7 @@ const db = require('../db');
 const IN_TYPES = ['Purchase (IN)', 'Return (IN)', 'Transfer IN', 'Client Return to Stock', 'Project Return to Stock'];
 const OUT_TYPES = ['Used in Project (OUT)', 'Sale (OUT)', 'Transfer OUT', 'Damaged/Written Off', 'Adjustment'];
 
-function getStockMovementReport({ from, to } = {}) {
+function getStockMovementReport({ from, to, category, subcategory } = {}) {
   const rows = db
     .prepare(
       `SELECT sm.id, sm.date, sm.movement_type, sm.quantity, sm.condition, sm.source, sm.status, sm.notes,
@@ -16,9 +16,16 @@ function getStockMovementReport({ from, to } = {}) {
        LEFT JOIN products p ON p.id = sm.product_id
        LEFT JOIN users u ON u.id = sm.recorded_by
        WHERE (? IS NULL OR sm.date >= ?) AND (? IS NULL OR sm.date <= ?)
+         AND (? IS NULL OR p.category = ?)
+         AND (? IS NULL OR p.subcategory = ?)
        ORDER BY sm.date ASC, sm.created_at ASC`
     )
-    .all(from || null, from || null, to || null, to || null);
+    .all(
+      from || null, from || null,
+      to || null, to || null,
+      category || null, category || null,
+      subcategory || null, subcategory || null
+    );
 
   const items = rows.map((r) => ({
     id: r.id,
@@ -47,7 +54,7 @@ function getStockMovementReport({ from, to } = {}) {
     { totalIn: 0, totalOut: 0 }
   );
 
-  return { items, totals, from: from || null, to: to || null };
+  return { items, totals, category: category || null, subcategory: subcategory || null, from: from || null, to: to || null };
 }
 
 function getProductReport({ category, subcategory, from, to } = {}) {

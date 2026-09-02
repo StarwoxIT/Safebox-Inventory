@@ -37,13 +37,13 @@ const PRODUCT_COLUMNS = [
 ];
 
 router.get('/stock-movements', authenticate, (req, res) => {
-  const { from, to } = req.query;
-  res.json(getStockMovementReport({ from, to }));
+  const { from, to, category, subcategory } = req.query;
+  res.json(getStockMovementReport({ from, to, category, subcategory }));
 });
 
 router.get('/stock-movements/export', authenticate, async (req, res) => {
-  const { from, to, format } = req.query;
-  const report = getStockMovementReport({ from, to });
+  const { from, to, category, subcategory, format } = req.query;
+  const report = getStockMovementReport({ from, to, category, subcategory });
   try {
     if (format === 'pdf') {
       const pdfBuffer = await renderStockMovementReportPdf(report);

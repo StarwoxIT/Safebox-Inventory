@@ -91,7 +91,8 @@ function buildStockMovementReportHtml(report, company) {
       </tfoot>
     </table>`;
 
-  return wrap('Stock Movement Report', `${company.name} — ${periodLabel(report.from, report.to)} — generated ${new Date().toISOString().slice(0, 10)}`, body, company);
+  const filterBits = [report.category, report.subcategory].filter(Boolean).join(' / ') || 'All categories';
+  return wrap('Stock Movement Report', `${company.name} — ${filterBits} — ${periodLabel(report.from, report.to)} — generated ${new Date().toISOString().slice(0, 10)}`, body, company);
 }
 
 function buildProductReportHtml(report, company) {
