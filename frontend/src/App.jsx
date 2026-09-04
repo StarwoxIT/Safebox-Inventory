@@ -22,6 +22,11 @@ import ChangePassword from './pages/ChangePassword';
 import Users from './pages/Users';
 import CompanyProfile from './pages/CompanyProfile';
 import AuditTrail from './pages/AuditTrail';
+import Reports from './pages/Reports';
+import StockMovementReport from './pages/StockMovementReport';
+import ProductReport from './pages/ProductReport';
+import DocumentsList from './pages/DocumentsList';
+import DocumentEditor from './pages/DocumentEditor';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -107,6 +112,13 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="reports" element={<Reports />} />
+        <Route path="reports/stock-movements" element={<StockMovementReport />} />
+        <Route path="reports/products" element={<ProductReport />} />
+        <Route path="invoices" element={<DocumentsList docType="invoice" />} />
+        <Route path="invoices/new" element={<DocumentEditor docType="invoice" />} />
+        <Route path="receipts" element={<DocumentsList docType="receipt" />} />
+        <Route path="receipts/new" element={<DocumentEditor docType="receipt" />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

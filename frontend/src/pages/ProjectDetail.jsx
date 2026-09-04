@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   IconPlus,
   IconDownload,
@@ -10,11 +10,24 @@ import {
   IconUsers,
   IconBoxSeam,
   IconReceipt2,
+  IconFileInvoice,
   IconCash,
   IconEdit,
+  IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import { getProject, updateProject, downloadProposalPdf, addProjectEngineer, addProjectMaterial, addProjectCost } from '../api/projects';
+import {
+  getProject,
+  updateProject,
+  downloadProposalPdf,
+  addProjectEngineer,
+  addProjectMaterial,
+  addProjectCost,
+  deleteProject,
+  requestDeleteProject,
+  cancelDeleteProjectRequest,
+  approveDeleteProject,
+} from '../api/projects';
 import { listQuotesForProject, downloadQuotePdf, selectQuote } from '../api/quotes';
 import { listProductStock } from '../api/products';
 import { listPaymentPlansForProject, createPaymentPlan, payMilestone, logUsagePeriod, payUsagePeriod } from '../api/payments';
@@ -24,6 +37,7 @@ import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import BackButton from '../components/BackButton';
+import ConfirmDialog from '../components/ConfirmDialog';
 import Pagination from '../components/Pagination';
 import usePagination from '../hooks/usePagination';
 
@@ -70,6 +84,7 @@ const emptyEditForm = {
 
 export default function ProjectDetail() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const canEditProject = user?.role === 'admin' || isSuperAdmin;
@@ -85,6 +100,7 @@ export default function ProjectDetail() {
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [editError, setEditError] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -105,6 +121,30 @@ export default function ProjectDetail() {
   };
 
   useEffect(load, [projectId]);
+
+  const handleDelete = async () => {
+    setError('');
+    try {
+      await deleteProject(project.id);
+      navigate('/projects');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete project.');
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleRequestDelete = () => runAction(project.id, () => requestDeleteProject(project.id));
+  const handleCancelDeleteRequest = () => runAction(project.id, () => cancelDeleteProjectRequest(project.id));
+  const handleApproveDelete = async (decision) => {
+    setError('');
+    try {
+      await approveDeleteProject(project.id, decision);
+      if (decision === 'Approved') navigate('/projects');
+      else load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to record decision.');
+    }
+  };
 
   const runAction = async (id, fn) => {
     setError('');
@@ -209,6 +249,23 @@ export default function ProjectDetail() {
                   <IconPlus size={18} /> New Option
                 </Link>
               )}
+              <Link className="btn btn-secondary" to={`/invoices/new?projectId=${project.id}`}>
+                <IconFileInvoice size={18} /> New Invoice
+              </Link>
+              <Link className="btn btn-secondary" to={`/receipts/new?projectId=${project.id}`}>
+                <IconReceipt2 size={18} /> New Receipt
+              </Link>
+              {canEditProject && !project.deletion_requested_by && (
+                isSuperAdmin ? (
+                  <button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+                    <IconTrash size={18} /> Delete
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-secondary" onClick={handleRequestDelete}>
+                    <IconTrash size={18} /> Request Delete
+                  </button>
+                )
+              )}
             </div>
           }
         />
@@ -219,6 +276,23 @@ export default function ProjectDetail() {
         {project.business_model && <StatusBadge type="businessModel" value={project.business_model} />}
         {project.payment_category && <StatusBadge type="paymentCategory" value={project.payment_category} />}
       </div>
+
+      {project.deletion_requested_by && (
+        <div className="alert alert-warning" role="alert" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>A deletion request is pending for this project.</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {canEditProject && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleCancelDeleteRequest}>Cancel Request</button>
+            )}
+            {isSuperAdmin && (
+              <>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleApproveDelete('Approved')}><IconCheck size={14} /> Approve Delete</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleApproveDelete('Rejected')}><IconX size={14} /> Reject</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
@@ -416,6 +490,16 @@ export default function ProjectDetail() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete project?"
+        body={`This will permanently remove "${project.name}" and all of its quotations, materials, and costs.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

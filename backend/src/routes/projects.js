@@ -15,10 +15,11 @@ const router = express.Router();
 router.get('/', authenticate, (req, res) => {
   const projects = db
     .prepare(
-      `SELECT p.*, u.name AS created_by_name,
+      `SELECT p.*, u.name AS created_by_name, du.name AS deletion_requested_by_name,
               (SELECT COUNT(*) FROM quotations q WHERE q.project_id = p.id) AS quotation_count
        FROM projects p
        LEFT JOIN users u ON u.id = p.created_by
+       LEFT JOIN users du ON du.id = p.deletion_requested_by
        ORDER BY p.created_at DESC`
     )
     .all();
@@ -184,6 +185,7 @@ router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) =
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
 });
 
+// Super admin can delete a project outright.
 router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   const result = db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
@@ -192,6 +194,52 @@ router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {
   }
   logAction({ user: req.user, action: 'project.delete', entityType: 'project', entityId: req.params.id, details: { name: existing?.name } });
   res.status(204).send();
+});
+
+// A regular admin can only flag a project for deletion — a super admin has to approve it
+// (see POST /:id/approve-delete) before it's actually removed.
+router.post('/:id/request-delete', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Project not found.' });
+  }
+  db.prepare("UPDATE projects SET deletion_requested_by = ?, deletion_requested_at = datetime('now') WHERE id = ?").run(req.user.id, req.params.id);
+  logAction({ user: req.user, action: 'project.delete_request', entityType: 'project', entityId: req.params.id, details: { name: existing.name } });
+  res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
+});
+
+router.post('/:id/cancel-delete-request', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Project not found.' });
+  }
+  db.prepare('UPDATE projects SET deletion_requested_by = NULL, deletion_requested_at = NULL WHERE id = ?').run(req.params.id);
+  logAction({ user: req.user, action: 'project.delete_request_cancel', entityType: 'project', entityId: req.params.id, details: { name: existing.name } });
+  res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
+});
+
+router.post('/:id/approve-delete', authenticate, authorize('super_admin'), (req, res) => {
+  const { decision } = req.body;
+  if (!['Approved', 'Rejected'].includes(decision)) {
+    return res.status(400).json({ error: 'decision must be Approved or Rejected.' });
+  }
+  const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Project not found.' });
+  }
+  if (!existing.deletion_requested_by) {
+    return res.status(400).json({ error: 'This project has no pending deletion request.' });
+  }
+
+  if (decision === 'Approved') {
+    db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
+    logAction({ user: req.user, action: 'project.delete_approve', entityType: 'project', entityId: req.params.id, details: { name: existing.name } });
+    return res.status(204).send();
+  }
+
+  db.prepare('UPDATE projects SET deletion_requested_by = NULL, deletion_requested_at = NULL WHERE id = ?').run(req.params.id);
+  logAction({ user: req.user, action: 'project.delete_reject', entityType: 'project', entityId: req.params.id, details: { name: existing.name } });
+  res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
 });
 
 // ── Engineers ────────────────────────────────────────────────────────────

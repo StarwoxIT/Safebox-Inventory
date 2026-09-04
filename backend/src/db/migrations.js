@@ -127,7 +127,10 @@ function runMigrations(db) {
 
   // ── Schema-shape migrations (old standalone inventory → unified portal) ──
   // Detects old CHECK constraint values and rebuilds the table if needed.
-  // No-op on an already-migrated or freshly-created database.
+  // No-op on an already-migrated or freshly-created database. Must run before the
+  // additive projects.* columns below — migrateProjects() rebuilds the table from
+  // a column list that predates those columns, so adding them first would just
+  // have the rebuild silently drop them again.
   if (isOldUsersShape(db)) {
     console.log('[migration] Detected old users schema — migrating...');
     migrateUsers(db);
@@ -136,6 +139,10 @@ function runMigrations(db) {
     console.log('[migration] Detected old projects schema — migrating...');
     migrateProjects(db);
   }
+
+  // Admin-initiated / super-admin-approved project deletion — added after the original schema.
+  addColumnIfMissing(db, 'projects', 'deletion_requested_by', 'TEXT REFERENCES users(id)');
+  addColumnIfMissing(db, 'projects', 'deletion_requested_at', 'TEXT');
 }
 
 module.exports = { runMigrations };

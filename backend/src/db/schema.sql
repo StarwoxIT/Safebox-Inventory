@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS projects (
   notes TEXT,
   created_by TEXT REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deletion_requested_by TEXT REFERENCES users(id),
+  deletion_requested_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS stock_movements (
@@ -202,6 +204,31 @@ CREATE TABLE IF NOT EXISTS quotation_versions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Invoices (bill issued before payment) and receipts (proof issued after payment) — same
+-- shape, distinguished by `type`. Can stand alone or be linked to a project/quotation for
+-- auto-filled line items.
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('invoice', 'receipt')),
+  doc_number TEXT NOT NULL UNIQUE,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  quotation_id TEXT REFERENCES quotations(id) ON DELETE SET NULL,
+  client_name TEXT,
+  client_address TEXT,
+  client_contact TEXT,
+  issue_date TEXT NOT NULL,
+  items_json TEXT NOT NULL DEFAULT '[]',
+  subtotal REAL NOT NULL DEFAULT 0,
+  vat_percent REAL NOT NULL DEFAULT 0,
+  vat_amount REAL NOT NULL DEFAULT 0,
+  grand_total REAL NOT NULL DEFAULT 0,
+  amount_paid REAL NOT NULL DEFAULT 0,
+  balance REAL NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS company_profile (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   name TEXT NOT NULL,
@@ -300,4 +327,6 @@ CREATE INDEX IF NOT EXISTS idx_payment_plans_project_id ON payment_plans(project
 CREATE INDEX IF NOT EXISTS idx_payment_milestones_plan_id ON payment_milestones(payment_plan_id);
 CREATE INDEX IF NOT EXISTS idx_usage_billing_periods_plan_id ON usage_billing_periods(payment_plan_id);
 CREATE INDEX IF NOT EXISTS idx_income_records_project_id ON income_records(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);

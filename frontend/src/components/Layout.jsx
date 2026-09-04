@@ -20,6 +20,9 @@ import {
   IconX,
   IconSun,
   IconMoon,
+  IconFileAnalytics,
+  IconFileInvoice,
+  IconReceipt2,
 } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -56,6 +59,17 @@ export default function Layout() {
         { to: '/returns', label: 'Returns', icon: IconRotateClockwise2 },
         { to: '/battery-collections', label: 'Battery Collections', icon: IconBattery },
       ],
+    },
+    {
+      label: 'Documents',
+      items: [
+        { to: '/invoices', label: 'Invoices', icon: IconFileInvoice },
+        { to: '/receipts', label: 'Receipts', icon: IconReceipt2 },
+      ],
+    },
+    {
+      label: 'Reports',
+      items: [{ to: '/reports', label: 'Reports', icon: IconFileAnalytics }],
     },
   ];
 

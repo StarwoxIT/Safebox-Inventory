@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconCheck, IconX, IconShieldCheck } from '@tabler/icons-react';
 import { listProducts, approveProduct } from '../api/products';
 import { listStockMovements, approveStockMovement } from '../api/stockMovements';
+import { listProjects, approveDeleteProject } from '../api/projects';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import Pagination from '../components/Pagination';
@@ -11,15 +12,17 @@ import BackButton from '../components/BackButton';
 export default function Approvals() {
   const [products, setProducts] = useState([]);
   const [movements, setMovements] = useState([]);
+  const [deletionRequests, setDeletionRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const load = () => {
     setLoading(true);
-    Promise.all([listProducts(), listStockMovements()])
-      .then(([p, m]) => {
+    Promise.all([listProducts(), listStockMovements(), listProjects()])
+      .then(([p, m, projects]) => {
         setProducts(p.filter((x) => x.status === 'Pending'));
         setMovements(m.filter((x) => x.status === 'Pending'));
+        setDeletionRequests(projects.filter((x) => x.deletion_requested_by));
       })
       .catch(() => setError('Failed to load pending approvals.'))
       .finally(() => setLoading(false));
@@ -31,7 +34,8 @@ export default function Approvals() {
     setError('');
     try {
       if (type === 'product') await approveProduct(id, decision);
-      else await approveStockMovement(id, decision);
+      else if (type === 'movement') await approveStockMovement(id, decision);
+      else await approveDeleteProject(id, decision);
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to record decision.');
@@ -40,6 +44,7 @@ export default function Approvals() {
 
   const productsPagination = usePagination(products, 10);
   const movementsPagination = usePagination(movements, 10);
+  const deletionsPagination = usePagination(deletionRequests, 10);
 
   if (loading) return <div className="page-loading">Loading approvals...</div>;
 
@@ -103,6 +108,33 @@ export default function Approvals() {
               </tbody>
             </table>
             <Pagination page={movementsPagination.page} totalPages={movementsPagination.totalPages} onPageChange={movementsPagination.setPage} />
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Pending project deletions ({deletionRequests.length})</h2>
+        {deletionRequests.length === 0 ? (
+          <EmptyState title="No pending deletion requests" />
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Project</th><th>Client</th><th>Requested by</th><th></th></tr></thead>
+              <tbody>
+                {deletionsPagination.paginated.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.name}</td>
+                    <td>{p.client_name || '-'}</td>
+                    <td>{p.deletion_requested_by_name || '-'}</td>
+                    <td style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => decide('project_delete', p.id, 'Approved')}><IconCheck size={14} /> Approve</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => decide('project_delete', p.id, 'Rejected')}><IconX size={14} /> Reject</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={deletionsPagination.page} totalPages={deletionsPagination.totalPages} onPageChange={deletionsPagination.setPage} />
           </div>
         )}
       </div>
