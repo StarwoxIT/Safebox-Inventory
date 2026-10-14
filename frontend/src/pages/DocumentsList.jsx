@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { IconPlus, IconDownload, IconTrash, IconFileInvoice, IconReceipt2 } from '@tabler/icons-react';
+import { IconPlus, IconDownload, IconEye, IconTrash, IconFileInvoice, IconReceipt2 } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { listDocuments, deleteDocument, downloadDocumentPdf } from '../api/documents';
+import { listDocuments, deleteDocument, downloadDocumentPdf, getDocumentPdf } from '../api/documents';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -10,6 +10,7 @@ import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
 import usePagination from '../hooks/usePagination';
 import BackButton from '../components/BackButton';
+import DocumentPreviewDialog from '../components/DocumentPreviewDialog';
 
 const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 });
 
@@ -23,6 +24,8 @@ export default function DocumentsList({ docType }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [previewingId, setPreviewingId] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -41,6 +44,19 @@ export default function DocumentsList({ docType }) {
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete.');
+    }
+  };
+
+  const handlePreview = async (doc) => {
+    setError('');
+    setPreviewingId(doc.id);
+    try {
+      const pdf = await getDocumentPdf(doc.id);
+      setPreviewFile({ pdf, docNumber: doc.docNumber });
+    } catch (err) {
+      setError(err.response?.data?.error || `Failed to preview ${doc.docNumber}.`);
+    } finally {
+      setPreviewingId(null);
     }
   };
 
@@ -92,6 +108,15 @@ export default function DocumentsList({ docType }) {
                   <td>{currency.format(d.grandTotal)}</td>
                   {!isReceipt && <td>{d.balance > 0 ? currency.format(d.balance) : '—'}</td>}
                   <td style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="icon-btn"
+                      title="Preview PDF"
+                      aria-label="Preview PDF"
+                      onClick={() => handlePreview(d)}
+                      disabled={Boolean(previewingId)}
+                    >
+                      <IconEye size={18} />
+                    </button>
                     <button className="icon-btn" title="Download PDF" aria-label="Download PDF" onClick={() => downloadDocumentPdf(d.id, d.docNumber)}>
                       <IconDownload size={18} />
                     </button>
@@ -118,6 +143,13 @@ export default function DocumentsList({ docType }) {
         onCancel={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
+      {previewFile && (
+        <DocumentPreviewDialog
+          pdfBlob={previewFile.pdf}
+          documentName={previewFile.docNumber}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }
