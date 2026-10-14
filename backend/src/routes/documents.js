@@ -33,6 +33,22 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
   }
 });
 
+router.post('/preview/pdf', authenticate, async (req, res) => {
+  try {
+    const doc = documentService.previewDocument(req.body);
+    const pdfBuffer = await renderDocumentPdf(doc);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="document-preview.pdf"',
+    });
+    res.send(pdfBuffer);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Document PDF preview failed:', err);
+    res.status(500).json({ error: 'Failed to generate document preview.', detail: err.message });
+  }
+});
+
 router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
   const { type, project_id, quotation_id, client_name, client_address, client_contact, issue_date, items, vat_percent, amount_paid, notes } = req.body;
   try {
