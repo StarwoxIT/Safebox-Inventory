@@ -16,6 +16,26 @@ function computeTotals(items, vatPercent, amountPaid) {
   return { subtotal, vatAmount, grandTotal, balance };
 }
 
+function normalizeDocumentItems(type, items) {
+  if (!DOC_PREFIX[type]) {
+    const err = new Error("type must be 'invoice' or 'receipt'.");
+    err.status = 400;
+    throw err;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    const err = new Error('At least one line item is required.');
+    err.status = 400;
+    throw err;
+  }
+
+  return items.map((i) => ({
+    description: i.description || i.name || '',
+    quantity: Number(i.quantity) || 0,
+    unit_cost: Number(i.unit_cost) || 0,
+    total: round2((Number(i.quantity) || 0) * (Number(i.unit_cost) || 0)),
+  }));
+}
+
 function rowToDocument(row) {
   return {
     id: row.id,
@@ -60,24 +80,7 @@ function getDocument(id) {
 }
 
 function createDocument({ type, projectId, quotationId, clientName, clientAddress, clientContact, issueDate, items, vatPercent, amountPaid, notes, userId }) {
-  if (!DOC_PREFIX[type]) {
-    const err = new Error("type must be 'invoice' or 'receipt'.");
-    err.status = 400;
-    throw err;
-  }
-  if (!Array.isArray(items) || items.length === 0) {
-    const err = new Error('At least one line item is required.');
-    err.status = 400;
-    throw err;
-  }
-
-  const normalizedItems = items.map((i) => ({
-    description: i.description || i.name || '',
-    quantity: Number(i.quantity) || 0,
-    unit_cost: Number(i.unit_cost) || 0,
-    total: round2((Number(i.quantity) || 0) * (Number(i.unit_cost) || 0)),
-  }));
-
+  const normalizedItems = normalizeDocumentItems(type, items);
   const { subtotal, vatAmount, grandTotal, balance } = computeTotals(normalizedItems, vatPercent, amountPaid);
 
   const id = uuid();
@@ -111,8 +114,30 @@ function createDocument({ type, projectId, quotationId, clientName, clientAddres
   return getDocument(id);
 }
 
+function previewDocument({ type, clientName, clientAddress, clientContact, issueDate, items, vatPercent, amountPaid, notes }) {
+  const normalizedItems = normalizeDocumentItems(type, items);
+  const { subtotal, vatAmount, grandTotal, balance } = computeTotals(normalizedItems, vatPercent, amountPaid);
+
+  return {
+    type,
+    docNumber: 'PREVIEW',
+    clientName: clientName || null,
+    clientAddress: clientAddress || null,
+    clientContact: clientContact || null,
+    issueDate: issueDate || new Date().toISOString().slice(0, 10),
+    items: normalizedItems,
+    subtotal,
+    vatPercent: Number(vatPercent) || 0,
+    vatAmount,
+    grandTotal,
+    amountPaid: Number(amountPaid) || 0,
+    balance,
+    notes: notes || null,
+  };
+}
+
 function deleteDocument(id) {
   return db.prepare('DELETE FROM documents WHERE id = ?').run(id).changes > 0;
 }
 
-module.exports = { listDocuments, getDocument, createDocument, deleteDocument };
+module.exports = { listDocuments, getDocument, createDocument, previewDocument, deleteDocument };

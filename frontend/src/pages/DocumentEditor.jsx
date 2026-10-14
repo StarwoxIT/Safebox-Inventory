@@ -3,9 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { IconTrash, IconPlus, IconFileInvoice, IconReceipt2 } from '@tabler/icons-react';
 import { listProjects, getProject } from '../api/projects';
 import { listQuotesForProject, getQuoteDetail } from '../api/quotes';
-import { createDocument } from '../api/documents';
+import { createDocument, previewDocumentPdf } from '../api/documents';
 import BackButton from '../components/BackButton';
 import PageHeader from '../components/PageHeader';
+import DocumentPreviewDialog from '../components/DocumentPreviewDialog';
 
 const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 });
 
@@ -34,6 +35,8 @@ export default function DocumentEditor({ docType }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewBlob, setPreviewBlob] = useState(null);
 
   useEffect(() => {
     listProjects().then(setProjects).catch(() => {});
@@ -85,6 +88,38 @@ export default function DocumentEditor({ docType }) {
   const grandTotal = subtotal + vatAmount;
   const balance = Math.max(grandTotal - Number(amountPaid || 0), 0);
 
+  const getDocumentPayload = (validItems) => ({
+    type: docType,
+    project_id: mode === 'project' ? projectId || null : null,
+    quotation_id: mode === 'project' ? quotationId || null : null,
+    client_name: clientName,
+    client_address: clientAddress,
+    client_contact: clientContact,
+    issue_date: issueDate,
+    items: validItems,
+    vat_percent: Number(vatPercent) || 0,
+    amount_paid: Number(amountPaid) || 0,
+    notes,
+  });
+
+  const handlePreview = async () => {
+    setError('');
+    const validItems = items.filter((i) => i.description.trim() && Number(i.quantity) > 0);
+    if (validItems.length === 0) {
+      setError('Add at least one item with a description and quantity.');
+      return;
+    }
+    setPreviewing(true);
+    try {
+      const pdf = await previewDocumentPdf(getDocumentPayload(validItems));
+      setPreviewBlob(pdf);
+    } catch (err) {
+      setError(err.response?.data?.error || `Failed to preview ${docType}.`);
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -95,19 +130,7 @@ export default function DocumentEditor({ docType }) {
     }
     setSubmitting(true);
     try {
-      const doc = await createDocument({
-        type: docType,
-        project_id: mode === 'project' ? projectId || null : null,
-        quotation_id: mode === 'project' ? quotationId || null : null,
-        client_name: clientName,
-        client_address: clientAddress,
-        client_contact: clientContact,
-        issue_date: issueDate,
-        items: validItems,
-        vat_percent: Number(vatPercent) || 0,
-        amount_paid: Number(amountPaid) || 0,
-        notes,
-      });
+      const doc = await createDocument(getDocumentPayload(validItems));
       navigate(isReceipt ? '/receipts' : '/invoices', { state: { createdId: doc.id } });
     } catch (err) {
       setError(err.response?.data?.error || `Failed to create ${docType}.`);
@@ -203,11 +226,21 @@ export default function DocumentEditor({ docType }) {
         </div>
 
         <div className="dialog-actions" style={{ marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={handlePreview} disabled={previewing || submitting}>
+            {previewing ? 'Preparing preview…' : `Preview ${isReceipt ? 'Receipt' : 'Invoice'}`}
+          </button>
           <button type="submit" className="btn btn-primary" disabled={submitting}>
             {submitting ? 'Saving…' : `Save ${isReceipt ? 'Receipt' : 'Invoice'}`}
           </button>
         </div>
       </form>
+      {previewBlob && (
+        <DocumentPreviewDialog
+          pdfBlob={previewBlob}
+          documentName={`New ${isReceipt ? 'Receipt' : 'Invoice'}`}
+          onClose={() => setPreviewBlob(null)}
+        />
+      )}
     </div>
   );
 }
