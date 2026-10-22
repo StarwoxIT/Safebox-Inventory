@@ -16,6 +16,12 @@ export const updateProjectEngineer = (engineerId, payload) =>
   client.put(`/projects/engineers/${engineerId}`, payload).then((res) => res.data);
 export const addProjectMaterial = (projectId, payload) =>
   client.post(`/projects/${projectId}/materials`, payload).then((res) => res.data);
+export const addPlannedProjectMaterial = (projectId, payload) =>
+  client.post(`/projects/${projectId}/planned-materials`, payload).then((res) => res.data);
+export const updatePlannedProjectMaterial = (projectId, materialId, payload) =>
+  client.put(`/projects/${projectId}/planned-materials/${materialId}`, payload).then((res) => res.data);
+export const deletePlannedProjectMaterial = (projectId, materialId) =>
+  client.delete(`/projects/${projectId}/planned-materials/${materialId}`).then((res) => res.data);
 export const addProjectCost = (projectId, payload) =>
   client.post(`/projects/${projectId}/costs`, payload).then((res) => res.data);
 

@@ -1,12 +1,12 @@
 const express = require('express');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const returns = db
     .prepare(
       `SELECT r.*, p.model AS product_name, pr.name AS project_name, u.name AS logged_by_name
@@ -20,7 +20,7 @@ router.get('/', authenticate, (req, res) => {
   res.json(returns);
 });
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { date, return_type, project_id, product_id, quantity, reason, oem, sent_to_oem_date, oem_response, notes } = req.body;
   if (!product_id || !quantity || !reason) {
     return res.status(400).json({ error: 'product_id, quantity and reason are required.' });

@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get('/', authenticate, authorize('super_admin'), (req, res) => {
   const users = db
-    .prepare('SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC')
+    .prepare('SELECT id, name, email, role, department, status, created_at FROM users ORDER BY created_at DESC')
     .all();
   res.json(users);
 });
@@ -17,9 +17,14 @@ router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
   if (!target) {
     return res.status(404).json({ error: 'User not found.' });
   }
-  const { name, role, status } = req.body;
+  const { name, role, department, status } = req.body;
   if (role && !['admin', 'super_admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role.' });
+  }
+  const assignedRole = role ?? target.role;
+  const assignedDepartment = assignedRole === 'super_admin' ? null : (department ?? target.department);
+  if (assignedRole === 'admin' && !['finance', 'engineering'].includes(assignedDepartment)) {
+    return res.status(400).json({ error: 'Admins must be assigned to Finance or Engineering.' });
   }
   if (status && !['Active', 'Inactive'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status.' });
@@ -34,14 +39,15 @@ router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
     }
   }
 
-  db.prepare('UPDATE users SET name = ?, role = ?, status = ? WHERE id = ?').run(
+  db.prepare('UPDATE users SET name = ?, role = ?, department = ?, status = ? WHERE id = ?').run(
     name ?? target.name,
-    role ?? target.role,
+    assignedRole,
+    assignedDepartment,
     status ?? target.status,
     req.params.id
   );
   logAction({ user: req.user, action: 'user.update', entityType: 'user', entityId: req.params.id, details: { role, status } });
-  res.json(db.prepare('SELECT id, name, email, role, status, created_at FROM users WHERE id = ?').get(req.params.id));
+  res.json(db.prepare('SELECT id, name, email, role, department, status, created_at FROM users WHERE id = ?').get(req.params.id));
 });
 
 router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {

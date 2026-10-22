@@ -17,13 +17,18 @@ function signToken(user) {
 }
 
 router.post('/register', authenticate, authorize('super_admin'), (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, department } = req.body;
+  const assignedRole = role || 'admin';
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required.' });
   }
-  if (role && !['admin', 'super_admin'].includes(role)) {
+  if (!['admin', 'super_admin'].includes(assignedRole)) {
     return res.status(400).json({ error: 'Invalid role.' });
+  }
+  if ((assignedRole === 'admin' && !['finance', 'engineering'].includes(department)) ||
+      (assignedRole === 'super_admin' && department)) {
+    return res.status(400).json({ error: 'Admins must be assigned to Finance or Engineering; Super Admins have no department.' });
   }
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
@@ -34,16 +39,16 @@ router.post('/register', authenticate, authorize('super_admin'), (req, res) => {
   const id = uuid();
   const passwordHash = bcrypt.hashSync(password, 10);
   db.prepare(
-    'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, name, email, passwordHash, role || 'admin');
+    'INSERT INTO users (id, name, email, password_hash, role, department) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(id, name, email, passwordHash, assignedRole, assignedRole === 'admin' ? department : null);
 
-  const user = { id, name, email, role: role || 'admin' };
+  const user = { id, name, email, role: assignedRole, department: assignedRole === 'admin' ? department : null };
   logAction({
     user: req.user,
     action: 'user.create',
     entityType: 'user',
     entityId: id,
-    details: { name, email, role: user.role },
+    details: { name, email, role: user.role, department: user.department },
   });
   res.status(201).json({ user, token: signToken(user) });
 });
@@ -62,7 +67,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'This account has been deactivated.' });
   }
 
-  const user = { id: row.id, name: row.name, email: row.email, role: row.role };
+  const user = { id: row.id, name: row.name, email: row.email, role: row.role, department: row.department };
   logAction({ user, action: 'auth.login', entityType: 'user', entityId: user.id });
   res.json({ user, token: signToken(user) });
 });

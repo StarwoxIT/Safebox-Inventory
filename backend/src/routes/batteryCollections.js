@@ -1,12 +1,12 @@
 const express = require('express');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const rows = db
     .prepare(
       `SELECT bc.*, u.name AS logged_by_name
@@ -18,7 +18,7 @@ router.get('/', authenticate, (req, res) => {
   res.json(rows);
 });
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { date, battery_type, quantity, collected_from, notes } = req.body;
   if (!battery_type || !quantity || !collected_from) {
     return res.status(400).json({ error: 'battery_type, quantity and collected_from are required.' });

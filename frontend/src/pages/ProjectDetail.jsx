@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   IconPlus,
   IconDownload,
@@ -21,7 +21,9 @@ import {
   updateProject,
   downloadProposalPdf,
   addProjectEngineer,
-  addProjectMaterial,
+  addPlannedProjectMaterial,
+  updatePlannedProjectMaterial,
+  deletePlannedProjectMaterial,
   addProjectCost,
   deleteProject,
   requestDeleteProject,
@@ -29,8 +31,8 @@ import {
   approveDeleteProject,
 } from '../api/projects';
 import { listQuotesForProject, downloadQuotePdf, selectQuote } from '../api/quotes';
-import { listProductStock } from '../api/products';
 import { listPaymentPlansForProject, createPaymentPlan, payMilestone, logUsagePeriod, payUsagePeriod } from '../api/payments';
+import { listProductStock } from '../api/products';
 import { formatProductLabel } from '../utils/productLabel';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
@@ -45,29 +47,62 @@ const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency:
 
 const TABS = ['Overview', 'Quotations', 'Payments', 'Materials', 'Engineers', 'Costs'];
 
-const BUSINESS_MODEL_PAYMENT_CATEGORIES = {
-  outright_purchase: ['full_payment', 'installments'],
-  eaas: ['pay_as_you_go'],
-  repair_service: ['full_payment', 'installments'],
-  maintenance_service: ['full_payment', 'installments'],
-  upgrade: ['full_payment', 'installments'],
-};
-
 const BUSINESS_MODEL_LABELS = {
   outright_purchase: 'Outright Purchase',
   eaas: 'EaaS',
   repair_service: 'Repair Service',
   maintenance_service: 'Maintenance Service',
   upgrade: 'Upgrade',
+  direct_purchase: 'Direct Purchase',
+  greenband_eaas: 'Greenband (EaaS)',
+  upgrade_expansion: 'Upgrade / System Expansion',
+  installation_only: 'Installation Only',
+  maintenance_repair: 'Maintenance / Repair Service',
+  other: 'Other',
 };
 
 const PAYMENT_CATEGORY_LABELS = {
   full_payment: 'Full Payment',
   installments: 'Installments',
   pay_as_you_go: 'Pay as you Go',
+  one_time_payment: 'One-time Payment',
+  instalment_payments: 'Instalment Payments',
+  other: 'Other',
 };
 
-const SECTORS = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting', 'Other'];
+const SECTORS = [
+  'Residential / Home',
+  'Commercial / Business',
+  'Healthcare',
+  'Education',
+  'Agriculture',
+  'Industrial / Manufacturing',
+  'Government',
+  'Religious Organisation',
+  'Other',
+  'Residential',
+  'Commercial',
+  'Industrial',
+  'Agricultural',
+  'Telecom',
+  'Street Lighting',
+];
+
+const EDITABLE_PROJECT_STATUSES = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'on_hold', label: 'On Hold' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const PROJECT_STATUS_ALIASES = {
+  prospect: 'not_started',
+  quote_accepted: 'in_progress',
+  on_going: 'in_progress',
+  active_eaas: 'in_progress',
+  rejected: 'cancelled',
+};
 
 const emptyEditForm = {
   name: '',
@@ -76,18 +111,20 @@ const emptyEditForm = {
   client_contact: '',
   description: '',
   manager: '',
-  system_size_kwp: '',
   business_model: '',
   payment_category: '',
   sector: '',
+  status: 'not_started',
 };
 
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-  const canEditProject = user?.role === 'admin' || isSuperAdmin;
+  const isFinance = isSuperAdmin || user?.department === 'finance';
+  const canEditProject = isSuperAdmin || (user?.role === 'admin' && user?.department === 'engineering');
   const [project, setProject] = useState(null);
   const [quotes, setQuotes] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -102,12 +139,12 @@ export default function ProjectDetail() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const load = () => {
-    setLoading(true);
+  const load = (showLoading = true) => {
+    if (showLoading) setLoading(true);
     Promise.all([
       getProject(projectId),
-      listQuotesForProject(projectId),
-      isSuperAdmin ? listPaymentPlansForProject(projectId) : Promise.resolve([]),
+      isFinance ? listQuotesForProject(projectId) : Promise.resolve([]),
+      isFinance ? listPaymentPlansForProject(projectId) : Promise.resolve([]),
       listProductStock(),
     ])
       .then(([projectData, quotesData, plansData, stockData]) => {
@@ -120,7 +157,7 @@ export default function ProjectDetail() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, isFinance]);
 
   const handleDelete = async () => {
     setError('');
@@ -151,9 +188,11 @@ export default function ProjectDetail() {
     setBusyId(id);
     try {
       await fn();
-      load();
+      load(false);
+      return true;
     } catch (err) {
       setError(err.response?.data?.error || 'Action failed.');
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -163,9 +202,8 @@ export default function ProjectDetail() {
   if (error && !project) return <div className="alert alert-error" role="alert">{error}</div>;
   if (!project) return null;
 
-  const canQuote = project.status === 'prospect' || isSuperAdmin;
+  const canQuote = isSuperAdmin;
   const plan = plans[0];
-  const visibleTabs = isSuperAdmin ? TABS : TABS.filter((t) => t !== 'Payments');
 
   const openEditModal = () => {
     setEditForm({
@@ -175,10 +213,10 @@ export default function ProjectDetail() {
       client_contact: project.client_contact || '',
       description: project.description || '',
       manager: project.manager || '',
-      system_size_kwp: project.system_size_kwp || '',
       business_model: project.business_model || '',
       payment_category: project.payment_category || '',
       sector: project.sector || '',
+      status: PROJECT_STATUS_ALIASES[project.status] || project.status,
     });
     setEditError('');
     setShowEditModal(true);
@@ -188,17 +226,9 @@ export default function ProjectDetail() {
     const { name, value } = e.target;
     setEditForm((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === 'business_model') {
-        const allowed = BUSINESS_MODEL_PAYMENT_CATEGORIES[value] || [];
-        if (!allowed.includes(prev.payment_category)) {
-          next.payment_category = allowed.length === 1 ? allowed[0] : '';
-        }
-      }
       return next;
     });
   };
-
-  const canEditModelCategory = isSuperAdmin || project.status === 'prospect';
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -207,7 +237,6 @@ export default function ProjectDetail() {
     try {
       await updateProject(project.id, {
         ...editForm,
-        system_size_kwp: editForm.system_size_kwp ? Number(editForm.system_size_kwp) : 0,
         business_model: editForm.business_model || null,
         payment_category: editForm.payment_category || null,
         sector: editForm.sector || null,
@@ -221,10 +250,6 @@ export default function ProjectDetail() {
     }
   };
 
-  const allowedEditPaymentCategories = editForm.business_model
-    ? BUSINESS_MODEL_PAYMENT_CATEGORIES[editForm.business_model] || []
-    : Object.keys(PAYMENT_CATEGORY_LABELS);
-
   return (
     <div>
       <div className="page-sticky-header">
@@ -236,11 +261,11 @@ export default function ProjectDetail() {
             <div className="btn-group">
               {canEditProject && (
                 <button type="button" className="btn btn-secondary" onClick={openEditModal}>
-                  <IconEdit size={18} /> Edit
+                  <IconEdit size={18} /> Edit Project
                 </button>
               )}
               {quotes.length > 0 && (
-                <button className="btn btn-secondary" onClick={() => downloadProposalPdf(project.id)}>
+                <button type="button" className="btn btn-secondary" onClick={() => downloadProposalPdf(project.id)}>
                   <IconDownload size={18} /> Full Proposal PDF
                 </button>
               )}
@@ -249,12 +274,16 @@ export default function ProjectDetail() {
                   <IconPlus size={18} /> New Option
                 </Link>
               )}
-              <Link className="btn btn-secondary" to={`/invoices/new?projectId=${project.id}`}>
-                <IconFileInvoice size={18} /> New Invoice
-              </Link>
-              <Link className="btn btn-secondary" to={`/receipts/new?projectId=${project.id}`}>
-                <IconReceipt2 size={18} /> New Receipt
-              </Link>
+              {isFinance && (
+                <>
+                  <Link className="btn btn-secondary" to={`/invoices/new?projectId=${project.id}`}>
+                    <IconFileInvoice size={18} /> New Invoice
+                  </Link>
+                  <Link className="btn btn-secondary" to={`/receipts/new?projectId=${project.id}`}>
+                    <IconReceipt2 size={18} /> New Receipt
+                  </Link>
+                </>
+              )}
               {canEditProject && !project.deletion_requested_by && (
                 isSuperAdmin ? (
                   <button type="button" className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
@@ -270,6 +299,10 @@ export default function ProjectDetail() {
           }
         />
       </div>
+
+      {location.state?.success && <div className="alert alert-success" role="status">{location.state.success}</div>}
+
+      {project.project_ref && <p className="project-reference-detail">Project Reference: <strong>{project.project_ref}</strong></p>}
 
       <div className="quote-option-flags" style={{ marginBottom: 16 }}>
         <StatusBadge type="projectStatus" value={project.status} />
@@ -297,7 +330,11 @@ export default function ProjectDetail() {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       <div className="tab-row" role="tablist">
-        {visibleTabs.map((t) => (
+        {TABS.filter((t) => {
+          if (isSuperAdmin) return true;
+          if (isFinance) return ['Overview', 'Quotations', 'Payments'].includes(t);
+          return !['Payments', 'Quotations'].includes(t);
+        }).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t}
           </button>
@@ -306,17 +343,17 @@ export default function ProjectDetail() {
 
       {tab === 'Overview' && (
         <div className="panel">
-          <h2>Client Details</h2>
+          <h2>Project Information</h2>
           <dl className="detail-list">
-            <dt>Client</dt><dd>{project.client_name || '-'}</dd>
-            <dt>Address</dt><dd>{project.client_address || '-'}</dd>
-            <dt>Contact</dt><dd>{project.client_contact || '-'}</dd>
-            <dt>Manager</dt><dd>{project.manager || '-'}</dd>
+            <dt>Client Name</dt><dd>{project.client_name || '-'}</dd>
+            <dt>Site Address</dt><dd>{project.client_address || '-'}</dd>
+            <dt>Project Contact</dt><dd>{project.client_contact || '-'}</dd>
+            <dt>Project Manager</dt><dd>{project.manager || '-'}</dd>
             <dt>Sector</dt><dd>{project.sector || '-'}</dd>
-            <dt>System Size</dt><dd>{project.system_size_kwp ? `${project.system_size_kwp} kWp` : '-'}</dd>
+            <dt>Business Model</dt><dd>{project.business_model ? BUSINESS_MODEL_LABELS[project.business_model] || project.business_model : '-'}</dd>
+            <dt>Payment Type</dt><dd>{project.payment_category ? PAYMENT_CATEGORY_LABELS[project.payment_category] || project.payment_category : '-'}</dd>
             <dt>Description</dt><dd>{project.description || '-'}</dd>
-            <dt>Materials Cost</dt><dd>{currency.format(project.materials_cost || 0)}</dd>
-            <dt>Other Costs</dt><dd>{currency.format(project.other_costs || 0)}</dd>
+            <dt>Date Created</dt><dd>{project.created_at ? new Date(project.created_at).toLocaleDateString() : '-'}</dd>
           </dl>
         </div>
       )}
@@ -327,54 +364,53 @@ export default function ProjectDetail() {
           {!canQuote && (
             <div className="alert alert-error" role="status">
               <IconLock size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-              Quoting is locked — this project has moved past prospect. Only a super admin can edit the selected quote now.
+              {isFinance
+                ? 'Finance can review quotation options; quotation changes are managed by Super Admin.'
+                : 'Quoting is locked — only a super admin can edit quotation options.'}
             </div>
           )}
           <div className="quote-option-grid">
-            {quotes.map((q) => (
-              <div className={`quote-option-card ${q.is_selected ? 'selected' : ''}`} key={q.id}>
+            {quotes.map((quote) => (
+              <div className={`quote-option-card ${quote.is_selected ? 'selected' : ''}`} key={quote.id}>
                 <div className="quote-option-header">
-                  <span className="option-badge">OPTION {q.option_number}</span>
-                  <StatusBadge type="quoteStatus" value={q.status} />
+                  <span className="option-badge">OPTION {quote.option_number}</span>
+                  <StatusBadge type="quoteStatus" value={quote.status} />
                 </div>
-                <h3>{q.title}</h3>
-                <p className="quote-total">{currency.format(q.grand_total)}</p>
-                <p className="quote-markup">Markup: {q.markup_percent}%</p>
-
+                <h3>{quote.title}</h3>
+                <p className="quote-total">{currency.format(quote.grand_total)}</p>
+                <p className="quote-markup">Markup: {quote.markup_percent}%</p>
                 <div className="quote-option-flags">
-                  {Boolean(q.is_selected) && <StatusBadge type="paymentStatus" value="active" />}
-                  {q.payment_status === 'paid' && <StatusBadge type="paymentStatus" value="paid" />}
+                  {Boolean(quote.is_selected) && <StatusBadge type="paymentStatus" value="active" />}
+                  {quote.payment_status === 'paid' && <StatusBadge type="paymentStatus" value="paid" />}
                 </div>
-
-                {(project.status === 'prospect' || isSuperAdmin) && (
+                {isSuperAdmin && (
                   <div className="quote-option-admin-actions">
-                    {!q.is_selected ? (
-                      <button className="btn btn-secondary btn-sm" disabled={busyId === q.id} onClick={() => runAction(q.id, () => selectQuote(q.id, true))}>
+                    {!quote.is_selected ? (
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={busyId === quote.id} onClick={() => runAction(quote.id, () => selectQuote(quote.id, true))}>
                         <IconCheck size={14} /> Mark Selected
                       </button>
                     ) : (
-                      <button className="btn btn-secondary btn-sm" disabled={busyId === q.id} onClick={() => runAction(q.id, () => selectQuote(q.id, false))}>
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={busyId === quote.id} onClick={() => runAction(quote.id, () => selectQuote(quote.id, false))}>
                         Unselect
                       </button>
                     )}
                   </div>
                 )}
-
                 <div className="quote-option-actions">
-                  {(project.status === 'prospect' || isSuperAdmin) && <Link to={`/quotes/${q.id}/edit`}>Edit</Link>}
-                  <Link to={`/quotes/${q.id}/history`}><IconHistory size={16} /> History</Link>
-                  <button onClick={() => downloadQuotePdf(q.id)}><IconDownload size={16} /> PDF</button>
+                  {isSuperAdmin && <Link to={`/quotes/${quote.id}/edit`}>Edit</Link>}
+                  {isSuperAdmin && <Link to={`/quotes/${quote.id}/history`}><IconHistory size={16} /> History</Link>}
+                  <button type="button" onClick={() => downloadQuotePdf(quote.id)}><IconDownload size={16} /> PDF</button>
                 </div>
               </div>
             ))}
             {quotes.length === 0 && (
-              <EmptyState icon={IconFilePlus} title="No quotation options yet" description="Create the first variation for this project." />
+              <EmptyState icon={IconFilePlus} title="No quotation options yet" description={canQuote ? 'Create the first variation for this project.' : 'No quotations have been created for this project.'} />
             )}
           </div>
         </div>
       )}
 
-      {tab === 'Payments' && isSuperAdmin && (
+      {tab === 'Payments' && isFinance && (
         <PaymentsTab
           project={project}
           quotes={quotes}
@@ -391,7 +427,10 @@ export default function ProjectDetail() {
         <MaterialsTab
           project={project}
           stock={stock}
-          onAdd={(payload) => runAction('material', () => addProjectMaterial(project.id, payload))}
+          canEdit={canEditProject}
+          onAdd={(payload) => runAction('material-plan', () => addPlannedProjectMaterial(project.id, payload))}
+          onUpdate={(materialId, payload) => runAction(materialId, () => updatePlannedProjectMaterial(project.id, materialId, payload))}
+          onDelete={(materialId) => runAction(materialId, () => deletePlannedProjectMaterial(project.id, materialId))}
         />
       )}
 
@@ -429,20 +468,16 @@ export default function ProjectDetail() {
                 <input name="client_name" value={editForm.client_name} onChange={handleEditChange} />
               </label>
               <label>
-                Client Address
+                Site Address
                 <input name="client_address" value={editForm.client_address} onChange={handleEditChange} />
               </label>
               <label>
-                Client Contact
+                Project Contact <span className="field-hint">(optional)</span>
                 <input name="client_contact" value={editForm.client_contact} onChange={handleEditChange} />
               </label>
               <label>
                 Project Manager
                 <input name="manager" value={editForm.manager} onChange={handleEditChange} />
-              </label>
-              <label>
-                System Size (kWp)
-                <input name="system_size_kwp" type="number" min="0" step="0.1" value={editForm.system_size_kwp} onChange={handleEditChange} />
               </label>
               <label>
                 Sector
@@ -452,8 +487,14 @@ export default function ProjectDetail() {
                 </select>
               </label>
               <label>
+                Project Status
+                <select name="status" value={editForm.status} onChange={handleEditChange}>
+                  {EDITABLE_PROJECT_STATUSES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label>
                 Business Model
-                <select name="business_model" value={editForm.business_model} onChange={handleEditChange} disabled={!canEditModelCategory}>
+                <select name="business_model" value={editForm.business_model} onChange={handleEditChange}>
                   <option value="">Select business model</option>
                   {Object.entries(BUSINESS_MODEL_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
@@ -461,19 +502,12 @@ export default function ProjectDetail() {
                 </select>
               </label>
               <label>
-                Payment Category
-                <select name="payment_category" value={editForm.payment_category} onChange={handleEditChange} disabled={!canEditModelCategory}>
-                  <option value="">Select payment category</option>
-                  {allowedEditPaymentCategories.map((value) => (
-                    <option key={value} value={value}>{PAYMENT_CATEGORY_LABELS[value]}</option>
-                  ))}
+                Payment Type
+                <select name="payment_category" value={editForm.payment_category} onChange={handleEditChange}>
+                  <option value="">Select payment type</option>
+                  {Object.entries(PAYMENT_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
-              {!canEditModelCategory && (
-                <p className="span-2 page-subtitle" style={{ margin: 0 }}>
-                  Only a super admin can change business model or payment category once quoting has moved past prospect.
-                </p>
-              )}
               <label className="span-2">
                 Description
                 <textarea name="description" value={editForm.description} onChange={handleEditChange} rows={3} />
@@ -505,13 +539,22 @@ export default function ProjectDetail() {
 }
 
 function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilestone, onLogUsage, onPayUsage }) {
-  const selectedQuote = quotes.find((q) => q.is_selected);
+  const selectedQuote = quotes.find((quote) => quote.is_selected);
   const [depositPercent, setDepositPercent] = useState(0);
   const [installmentCount, setInstallmentCount] = useState(3);
   const [frequency, setFrequency] = useState('month');
   const [usageForm, setUsageForm] = useState({ period_start: '', period_end: '', units_consumed: '', rate_per_unit: '' });
 
   if (!plan) {
+    if (!['full_payment', 'one_time_payment', 'installments', 'instalment_payments', 'pay_as_you_go'].includes(project.payment_category)) {
+      return (
+        <EmptyState
+          icon={IconReceipt2}
+          title="Custom payment arrangement"
+          description="This payment type does not have an automated payment-plan schedule."
+        />
+      );
+    }
     if (project.status !== 'quote_accepted') {
       return (
         <EmptyState
@@ -521,14 +564,23 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
         />
       );
     }
+    if (!selectedQuote) {
+      return (
+        <EmptyState
+          icon={IconReceipt2}
+          title="No selected quotation"
+          description="Select a quotation option before creating a payment plan."
+        />
+      );
+    }
     return (
       <div className="panel">
         <h2>Create Payment Plan</h2>
-        <p className="page-subtitle">Category: <StatusBadge type="paymentCategory" value={project.payment_category} /> — total {currency.format(selectedQuote?.grand_total || 0)}</p>
+        <p className="page-subtitle">Category: <StatusBadge type="paymentCategory" value={project.payment_category} /> — total {currency.format(selectedQuote.grand_total || 0)}</p>
         <form
           className="form-grid"
-          onSubmit={(e) => {
-            e.preventDefault();
+          onSubmit={(event) => {
+            event.preventDefault();
             onCreatePlan({
               project_id: project.id,
               quotation_id: selectedQuote.id,
@@ -540,17 +592,17 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
         >
           <label>
             Deposit %
-            <input type="number" min="0" max="100" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />
+            <input type="number" min="0" max="100" value={depositPercent} onChange={(event) => setDepositPercent(event.target.value)} />
           </label>
           {project.payment_category === 'installments' && (
             <>
               <label>
                 Number of Installments
-                <input type="number" min="1" value={installmentCount} onChange={(e) => setInstallmentCount(e.target.value)} />
+                <input type="number" min="1" value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value)} />
               </label>
               <label>
                 Frequency
-                <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+                <select value={frequency} onChange={(event) => setFrequency(event.target.value)}>
                   <option value="day">Daily</option>
                   <option value="week">Weekly</option>
                   <option value="month">Monthly</option>
@@ -573,21 +625,20 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
         <StatusBadge type="paymentCategory" value={plan.category} />
         <StatusBadge type="paymentStatus" value={plan.status} />
       </div>
-
-      {plan.milestones.length > 0 && (
+      {plan.milestones?.length > 0 && (
         <div className="data-table-wrap">
           <table className="data-table">
             <thead><tr><th>Label</th><th>Due</th><th>Amount</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {plan.milestones.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.label}</td>
-                  <td>{m.due_date || 'On completion'}</td>
-                  <td>{currency.format(m.amount)}</td>
-                  <td><StatusBadge type="paymentStatus" value={m.status} /></td>
+              {plan.milestones.map((milestone) => (
+                <tr key={milestone.id}>
+                  <td>{milestone.label}</td>
+                  <td>{milestone.due_date || 'On completion'}</td>
+                  <td>{currency.format(milestone.amount)}</td>
+                  <td><StatusBadge type="paymentStatus" value={milestone.status} /></td>
                   <td>
-                    {m.status === 'pending' && (
-                      <button className="btn btn-secondary btn-sm" disabled={busyId === m.id} onClick={() => onPayMilestone(m.id)}>
+                    {milestone.status === 'pending' && (
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={busyId === milestone.id} onClick={() => onPayMilestone(milestone.id)}>
                         <IconCash size={14} /> Mark Paid
                       </button>
                     )}
@@ -598,14 +649,13 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
           </table>
         </div>
       )}
-
       {plan.category === 'pay_as_you_go' && (
         <>
           <h3 style={{ marginTop: 20 }}>Usage Billing</h3>
           <form
             className="form-grid"
-            onSubmit={(e) => {
-              e.preventDefault();
+            onSubmit={(event) => {
+              event.preventDefault();
               onLogUsage(plan.id, {
                 ...usageForm,
                 units_consumed: Number(usageForm.units_consumed),
@@ -614,28 +664,27 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
               setUsageForm({ period_start: '', period_end: '', units_consumed: '', rate_per_unit: '' });
             }}
           >
-            <label>Period Start<input type="date" required value={usageForm.period_start} onChange={(e) => setUsageForm({ ...usageForm, period_start: e.target.value })} /></label>
-            <label>Period End<input type="date" required value={usageForm.period_end} onChange={(e) => setUsageForm({ ...usageForm, period_end: e.target.value })} /></label>
-            <label>Units Consumed<input type="number" min="0" step="0.01" required value={usageForm.units_consumed} onChange={(e) => setUsageForm({ ...usageForm, units_consumed: e.target.value })} /></label>
-            <label>Rate per Unit<input type="number" min="0" step="0.01" required value={usageForm.rate_per_unit} onChange={(e) => setUsageForm({ ...usageForm, rate_per_unit: e.target.value })} /></label>
+            <label>Period Start<input type="date" required value={usageForm.period_start} onChange={(event) => setUsageForm({ ...usageForm, period_start: event.target.value })} /></label>
+            <label>Period End<input type="date" required value={usageForm.period_end} onChange={(event) => setUsageForm({ ...usageForm, period_end: event.target.value })} /></label>
+            <label>Units Consumed<input type="number" min="0" step="0.01" required value={usageForm.units_consumed} onChange={(event) => setUsageForm({ ...usageForm, units_consumed: event.target.value })} /></label>
+            <label>Rate per Unit<input type="number" min="0" step="0.01" required value={usageForm.rate_per_unit} onChange={(event) => setUsageForm({ ...usageForm, rate_per_unit: event.target.value })} /></label>
             <div className="span-2"><button type="submit" className="btn btn-secondary">Log Usage Period</button></div>
           </form>
-
-          {plan.usage_periods.length > 0 && (
+          {plan.usage_periods?.length > 0 && (
             <div className="data-table-wrap">
               <table className="data-table">
                 <thead><tr><th>Period</th><th>Units</th><th>Rate</th><th>Amount Due</th><th>Status</th><th></th></tr></thead>
                 <tbody>
-                  {plan.usage_periods.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.period_start} → {p.period_end}</td>
-                      <td>{p.units_consumed}</td>
-                      <td>{currency.format(p.rate_per_unit)}</td>
-                      <td>{currency.format(p.amount_due)}</td>
-                      <td><StatusBadge type="paymentStatus" value={p.status} /></td>
+                  {plan.usage_periods.map((period) => (
+                    <tr key={period.id}>
+                      <td>{period.period_start} → {period.period_end}</td>
+                      <td>{period.units_consumed}</td>
+                      <td>{currency.format(period.rate_per_unit)}</td>
+                      <td>{currency.format(period.amount_due)}</td>
+                      <td><StatusBadge type="paymentStatus" value={period.status} /></td>
                       <td>
-                        {p.status === 'pending' && (
-                          <button className="btn btn-secondary btn-sm" disabled={busyId === p.id} onClick={() => onPayUsage(p.id)}>
+                        {period.status === 'pending' && (
+                          <button type="button" className="btn btn-secondary btn-sm" disabled={busyId === period.id} onClick={() => onPayUsage(period.id)}>
                             <IconCash size={14} /> Mark Paid
                           </button>
                         )}
@@ -652,76 +701,159 @@ function PaymentsTab({ project, quotes, plan, busyId, onCreatePlan, onPayMilesto
   );
 }
 
-function MaterialsTab({ project, stock, onAdd }) {
+function MaterialsTab({ project, stock, canEdit, onAdd, onUpdate, onDelete }) {
+  const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState({ product_id: '', quantity: '' });
   const [formError, setFormError] = useState('');
-  const { page, setPage, totalPages, paginated } = usePagination(project.materials || [], 10);
-  const inStockProducts = stock.filter((p) => p.current_stock > 0);
-  const selectedProduct = inStockProducts.find((p) => p.id === form.product_id);
+  const [editingMaterial, setEditingMaterial] = useState(null);
+  const [editForm, setEditForm] = useState({ product_id: '', quantity: '' });
+  const [saving, setSaving] = useState(false);
+  const plannedMaterials = project.planned_materials || [];
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleAdd = async (event) => {
+    event.preventDefault();
     setFormError('');
-    const qty = Number(form.quantity);
-    if (selectedProduct && qty > selectedProduct.current_stock) {
-      setFormError(`Only ${selectedProduct.current_stock} ${selectedProduct.unit} of ${selectedProduct.model} in stock.`);
+    const quantity = Number(form.quantity);
+    if (!form.product_id || !Number.isFinite(quantity) || quantity <= 0) {
+      setFormError('Select a product and enter a quantity greater than zero.');
       return;
     }
-    onAdd({ ...form, quantity: qty });
-    setForm({ product_id: '', quantity: '' });
+    setSaving(true);
+    const success = await onAdd({ product_id: form.product_id, quantity });
+    if (success) {
+      setForm({ product_id: '', quantity: '' });
+      setShowAddForm(false);
+    }
+    setSaving(false);
+  };
+
+  const startEdit = (material) => {
+    setEditingMaterial(material.id);
+    setEditForm({ product_id: material.product_id, quantity: String(material.quantity) });
+    setFormError('');
+  };
+
+  const handleUpdate = async (materialId) => {
+    setFormError('');
+    const quantity = Number(editForm.quantity);
+    if (!editForm.product_id || !Number.isFinite(quantity) || quantity <= 0) {
+      setFormError('Select a product and enter a quantity greater than zero.');
+      return;
+    }
+    setSaving(true);
+    const success = await onUpdate(materialId, { product_id: editForm.product_id, quantity });
+    if (success) setEditingMaterial(null);
+    setSaving(false);
+  };
+
+  const handleDelete = async (materialId) => {
+    setSaving(true);
+    await onDelete(materialId);
+    setSaving(false);
   };
 
   return (
-    <div className="panel">
-      <h2>Materials Used</h2>
-      <form className="form-grid" onSubmit={handleSubmit}>
-        <label>
-          Product
-          <select
-            required
-            value={form.product_id}
-            onChange={(e) => { setForm({ product_id: e.target.value, quantity: '' }); setFormError(''); }}
-          >
-            <option value="">Select product</option>
-            {inStockProducts.map((p) => (
-              <option key={p.id} value={p.id}>{formatProductLabel(p)} — {p.current_stock} {p.unit} in stock</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Quantity
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            max={selectedProduct?.current_stock}
-            required
-            value={form.quantity}
-            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-          />
-        </label>
-        {formError && <span className="field-error span-2">{formError}</span>}
-        {inStockProducts.length === 0 && (
-          <p className="span-2 page-subtitle" style={{ margin: 0 }}>No products currently in stock — restock before logging material use.</p>
+    <section className="panel project-materials-panel">
+      <div className="project-section-heading">
+        <div>
+          <h2>Planned Materials</h2>
+          <p className="page-subtitle">Planned quantities do not change inventory. Record actual stock issues through Stock Movements.</p>
+        </div>
+        {canEdit && (
+          <button type="button" className="btn btn-primary" onClick={() => setShowAddForm((visible) => !visible)}>
+            <IconPlus size={18} /> {showAddForm ? 'Close' : 'Add Materials'}
+          </button>
         )}
-        <div className="span-2"><button type="submit" className="btn btn-secondary" disabled={inStockProducts.length === 0}>Log Material</button></div>
-      </form>
-      {project.materials?.length > 0 ? (
+      </div>
+
+      {formError && <div className="alert alert-error" role="alert">{formError}</div>}
+
+      {showAddForm && (
+        <form className="form-grid planned-material-form" onSubmit={handleAdd}>
+          <label>
+            Inventory Product
+            <select required value={form.product_id} onChange={(event) => setForm({ ...form, product_id: event.target.value })}>
+              <option value="">Select product</option>
+              {stock.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {formatProductLabel(product)} — {product.current_stock} {product.unit} available
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Planned Quantity
+            <input type="number" min="0.01" step="0.01" required value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
+          </label>
+          {stock.length === 0 && <p className="span-2 page-subtitle">No approved products are available in the inventory catalogue.</p>}
+          <div className="span-2 dialog-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || stock.length === 0}>{saving ? 'Adding…' : 'Add Planned Material'}</button>
+          </div>
+        </form>
+      )}
+
+      {plannedMaterials.length === 0 ? (
+        <EmptyState icon={IconBoxSeam} title="No planned materials yet" description={canEdit ? 'Add products from the inventory catalogue to plan this project.' : undefined} />
+      ) : (
         <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>Date</th><th>Product</th><th>Qty</th><th>Cost</th></tr></thead>
+            <thead><tr><th>Product</th><th>Planned Quantity</th><th>Available Stock</th>{canEdit && <th>Actions</th>}</tr></thead>
             <tbody>
-              {paginated.map((m) => (
-                <tr key={m.id}><td>{m.date}</td><td>{m.product_name}</td><td>{m.quantity} {m.unit}</td><td>{currency.format(m.quantity * m.unit_cost)}</td></tr>
-              ))}
+              {plannedMaterials.map((material) => {
+                const product = stock.find((entry) => entry.id === material.product_id);
+                const isEditing = editingMaterial === material.id;
+                return (
+                  <tr key={material.id}>
+                    <td>
+                      {isEditing ? (
+                        <select aria-label={`Product for ${material.product_name}`} value={editForm.product_id} onChange={(event) => setEditForm({ ...editForm, product_id: event.target.value })}>
+                          {stock.map((entry) => <option key={entry.id} value={entry.id}>{formatProductLabel(entry)}</option>)}
+                        </select>
+                      ) : material.product_name}
+                    </td>
+                    <td>
+                      {isEditing ? (
+                        <input aria-label={`Planned quantity for ${material.product_name}`} type="number" min="0.01" step="0.01" value={editForm.quantity} onChange={(event) => setEditForm({ ...editForm, quantity: event.target.value })} />
+                      ) : `${material.quantity} ${material.unit || ''}`}
+                    </td>
+                    <td>{product ? `${product.current_stock} ${product.unit}` : '—'}</td>
+                    {canEdit && (
+                      <td className="planned-material-actions">
+                        {isEditing ? (
+                          <>
+                            <button type="button" className="btn btn-primary btn-sm" onClick={() => handleUpdate(material.id)} disabled={saving}><IconCheck size={14} /> Save</button>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingMaterial(null)} disabled={saving}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(material)}>Edit</button>
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(material.id)} disabled={saving}><IconTrash size={14} /> Remove</button>
+                          </>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
-      ) : (
-        <EmptyState icon={IconBoxSeam} title="No materials logged yet" />
       )}
-    </div>
+
+      {project.materials?.length > 0 && (
+        <div className="actual-materials-section">
+          <h3>Previously Issued to Project</h3>
+          <p className="page-subtitle">These are existing inventory issue records; planned materials above do not create stock movements.</p>
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Date</th><th>Product</th><th>Quantity</th></tr></thead>
+              <tbody>{project.materials.map((material) => <tr key={material.id}><td>{material.date || '—'}</td><td>{material.product_name}</td><td>{material.quantity} {material.unit || ''}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

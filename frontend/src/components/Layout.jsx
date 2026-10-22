@@ -41,16 +41,18 @@ export default function Layout() {
 
   const isSuperAdmin = user?.role === 'super_admin';
 
+  const isFinance = user?.department === 'finance';
+  const isEngineering = user?.department === 'engineering';
   const navGroups = [
     {
       label: 'Overview',
       items: [{ to: '/', label: 'Dashboard', icon: IconLayoutDashboard, end: true }],
     },
-    {
-      label: 'Projects & Quotes',
+    ...(isSuperAdmin || isEngineering ? [{
+      label: 'Projects',
       items: [{ to: '/projects', label: 'Projects', icon: IconBriefcase }],
-    },
-    {
+    }] : []),
+    ...(isSuperAdmin || isFinance ? [{
       label: 'Inventory',
       items: [
         { to: '/products', label: 'Products', icon: IconBoxSeam },
@@ -59,21 +61,21 @@ export default function Layout() {
         { to: '/returns', label: 'Returns', icon: IconRotateClockwise2 },
         { to: '/battery-collections', label: 'Battery Collections', icon: IconBattery },
       ],
-    },
-    {
+    }] : []),
+    ...(isSuperAdmin || isFinance ? [{
       label: 'Documents',
       items: [
         { to: '/invoices', label: 'Invoices', icon: IconFileInvoice },
         { to: '/receipts', label: 'Receipts', icon: IconReceipt2 },
       ],
-    },
-    {
+    }] : []),
+    ...(isSuperAdmin || isFinance ? [{
       label: 'Reports',
       items: [{ to: '/reports', label: 'Reports', icon: IconFileAnalytics }],
-    },
+    }] : []),
   ];
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin || isFinance) {
     navGroups.splice(2, 0, {
       label: 'Payments',
       items: [{ to: '/payment-tracker', label: 'Payment Tracker', icon: IconCashBanknote }],
@@ -84,14 +86,14 @@ export default function Layout() {
   if (isSuperAdmin) {
     adminItems.push({ to: '/approvals', label: 'Approvals', icon: IconShieldCheck });
   }
-  if (user?.role === 'admin' || isSuperAdmin) {
+  if (isSuperAdmin) {
     adminItems.push({ to: '/company-profile', label: 'Company Profile', icon: IconBuildingFactory2 });
   }
   if (isSuperAdmin) {
     adminItems.push({ to: '/users', label: 'Users', icon: IconUsers });
     adminItems.push({ to: '/audit-trail', label: 'Audit Trail', icon: IconHistory });
   }
-  adminItems.push({ to: '/settings', label: 'Settings', icon: IconSettings });
+  if (isSuperAdmin) adminItems.push({ to: '/settings', label: 'Settings', icon: IconSettings });
   adminItems.push({ to: '/change-password', label: 'Change Password', icon: IconLock });
   if (adminItems.length > 0) {
     navGroups.push({ label: 'Admin', items: adminItems });
@@ -112,7 +114,7 @@ export default function Layout() {
             {theme === 'dark' ? <IconSun size={20} /> : <IconMoon size={20} />}
           </button>
           <span className="user-name">{user?.name}</span>
-          <StatusBadge type="role" value={user?.role} />
+          <StatusBadge type="role" value={user?.role} department={user?.department} />
           <button className="icon-btn" onClick={handleLogout} title="Log out" aria-label="Log out">
             <IconLogout size={20} />
           </button>

@@ -1,11 +1,11 @@
 const express = require('express');
 const db = require('../db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorizeDepartment } = require('../middleware/auth');
 const { listDuePaymentMilestones } = require('../services/paymentService');
 
 const router = express.Router();
 
-router.get('/stats', authenticate, (req, res) => {
+router.get('/stats', authenticate, authorizeDepartment('finance', 'engineering'), (req, res) => {
   const totalProjects = db.prepare('SELECT COUNT(*) AS c FROM projects').get().c;
   const totalQuotes = db.prepare('SELECT COUNT(*) AS c FROM quotations').get().c;
   const totalRevenueProjection = db
@@ -15,9 +15,10 @@ router.get('/stats', authenticate, (req, res) => {
     .prepare("SELECT COALESCE(SUM(grand_total), 0) AS total FROM quotations WHERE status = 'draft'")
     .get().total;
   const isSuperAdmin = req.user.role === 'super_admin';
+  const isFinance = isSuperAdmin || req.user.department === 'finance';
 
-  // Payment data (balances, income, due milestones) is super-admin only — everyone else gets these zeroed out.
-  const confirmedIncome = isSuperAdmin
+  // Finance and management can see payment data; Engineering receives no financial values.
+  const confirmedIncome = isFinance
     ? db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM income_records').get().total
     : 0;
   const selectedQuotesCount = db.prepare('SELECT COUNT(*) AS c FROM quotations WHERE is_selected = 1').get().c;
@@ -27,15 +28,15 @@ router.get('/stats', authenticate, (req, res) => {
     .all()
     .reduce((acc, row) => ({ ...acc, [row.status]: row.c }), {});
 
-  const outstandingBalance = isSuperAdmin
+  const outstandingBalance = isFinance
     ? db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payment_milestones WHERE status = 'pending'").get().total
     : 0;
-  const overduePendingUsage = isSuperAdmin
+  const overduePendingUsage = isFinance
     ? db.prepare("SELECT COALESCE(SUM(amount_due), 0) AS total FROM usage_billing_periods WHERE status = 'pending'").get().total
     : 0;
   const activeEaasProjects = db.prepare("SELECT COUNT(*) AS c FROM projects WHERE status = 'active_eaas'").get().c;
 
-  const duePayments = isSuperAdmin ? listDuePaymentMilestones(7) : [];
+  const duePayments = isFinance ? listDuePaymentMilestones(7) : [];
   const duePaymentsCount = duePayments.length;
   const duePaymentsList = duePayments.slice(0, 5).map((d) => ({
     projectId: d.project_id,
@@ -105,7 +106,8 @@ router.get('/stats', authenticate, (req, res) => {
     )
     .all();
 
-  res.json({
+  const response = {
+    department: req.user.role === 'super_admin' ? null : req.user.department,
     totalProjects,
     totalQuotes,
     totalRevenueProjection,
@@ -128,7 +130,41 @@ router.get('/stats', authenticate, (req, res) => {
     categorySummary,
     revenueByMonth,
     recentActivity,
-  });
+  };
+
+  if (!isSuperAdmin && req.user.department === 'engineering') {
+    response.totalQuotes = 0;
+    response.totalRevenueProjection = 0;
+    response.pendingRevenueProjection = 0;
+    response.confirmedIncome = 0;
+    response.selectedQuotesCount = 0;
+    response.outstandingBalance = 0;
+    response.overduePendingUsage = 0;
+    response.duePaymentsCount = 0;
+    response.duePaymentsList = [];
+    response.pendingApprovals = 0;
+    response.totalStockValue = 0;
+    response.belowThreshold = 0;
+    response.lowStock = 0;
+    response.totalApprovedProducts = 0;
+    response.openOemReturns = 0;
+    response.categorySummary = {};
+    response.revenueByMonth = [];
+    response.recentActivity = [];
+  } else if (!isSuperAdmin && req.user.department === 'finance') {
+    response.totalProjects = 0;
+    response.totalQuotes = 0;
+    response.totalRevenueProjection = 0;
+    response.pendingRevenueProjection = 0;
+    response.selectedQuotesCount = 0;
+    response.projectsByStatus = {};
+    response.activeEaasProjects = 0;
+    response.totalEngineers = 0;
+    response.revenueByMonth = [];
+    response.recentActivity = [];
+  }
+
+  res.json(response);
 });
 
 module.exports = router;

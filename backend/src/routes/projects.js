@@ -1,9 +1,17 @@
 const express = require('express');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const quoteService = require('../services/quoteService');
-const { isValidBusinessModelPaymentCategory, getProjectWithCosts } = require('../services/projectService');
+const {
+  nextProjectReference,
+  isValidBusinessModelPaymentCategory,
+  PROJECT_STATUS_VALUES,
+  PROJECT_SECTORS,
+  PROJECT_BUSINESS_MODELS,
+  PROJECT_PAYMENT_CATEGORIES,
+  getProjectWithCosts,
+} = require('../services/projectService');
 const { renderProposalPdf } = require('../services/pdfService');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
@@ -12,7 +20,36 @@ const { getCurrentStock } = require('../services/stockService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+function validateProjectFields(fields, { creating = false } = {}) {
+  if (creating) {
+    const requiredFields = ['name', 'client_name', 'client_address', 'manager', 'sector', 'business_model', 'payment_category', 'status'];
+    for (const field of requiredFields) {
+      if (typeof fields[field] !== 'string' || !fields[field].trim()) {
+        return `${field} is required.`;
+      }
+    }
+  }
+  for (const field of ['name', 'client_name', 'client_address', 'manager']) {
+    if (fields[field] !== undefined && fields[field] !== null && typeof fields[field] !== 'string') {
+      return `${field} must be text.`;
+    }
+  }
+  if (fields.name !== undefined && (typeof fields.name !== 'string' || fields.name.trim().length > 160)) {
+    return 'Project name must be 160 characters or fewer.';
+  }
+  for (const field of ['client_contact', 'description']) {
+    if (fields[field] !== undefined && fields[field] !== null && typeof fields[field] !== 'string') {
+      return `${field} must be text.`;
+    }
+  }
+  if (fields.sector !== undefined && fields.sector !== null && fields.sector !== '' && !PROJECT_SECTORS.includes(fields.sector)) return 'Select a valid project sector.';
+  if (fields.business_model !== undefined && fields.business_model !== null && fields.business_model !== '' && !PROJECT_BUSINESS_MODELS.includes(fields.business_model)) return 'Select a valid business model.';
+  if (fields.payment_category !== undefined && fields.payment_category !== null && fields.payment_category !== '' && !PROJECT_PAYMENT_CATEGORIES.includes(fields.payment_category)) return 'Select a valid payment type.';
+  if (fields.status !== undefined && !PROJECT_STATUS_VALUES.includes(fields.status)) return 'Select a valid project status.';
+  return null;
+}
+
+router.get('/', authenticate, authorizeDepartment('finance', 'engineering'), (req, res) => {
   const projects = db
     .prepare(
       `SELECT p.*, u.name AS created_by_name, du.name AS deletion_requested_by_name,
@@ -26,7 +63,7 @@ router.get('/', authenticate, (req, res) => {
   res.json(projects);
 });
 
-router.get('/:id', authenticate, (req, res) => {
+router.get('/:id', authenticate, authorizeDepartment('finance', 'engineering'), (req, res) => {
   const project = getProjectWithCosts(req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Project not found.' });
@@ -41,6 +78,15 @@ router.get('/:id', authenticate, (req, res) => {
        WHERE pm.project_id = ? ORDER BY pm.date DESC`
     )
     .all(project.id);
+  project.planned_materials = db
+    .prepare(
+      `SELECT ppm.*, p.model AS product_name, p.unit, p.category
+       FROM planned_project_materials ppm
+       JOIN products p ON p.id = ppm.product_id
+       WHERE ppm.project_id = ?
+       ORDER BY ppm.created_at DESC`
+    )
+    .all(project.id);
   project.costs = db
     .prepare('SELECT * FROM project_costs WHERE project_id = ? ORDER BY created_at DESC')
     .all(project.id);
@@ -48,7 +94,7 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // GET /projects/:id/proposal/pdf -> combined cover + profile + all quotation options for the project
-router.get('/:id/proposal/pdf', authenticate, async (req, res) => {
+router.get('/:id/proposal/pdf', authenticate, authorize('super_admin'), async (req, res) => {
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Project not found.' });
@@ -74,7 +120,7 @@ router.get('/:id/proposal/pdf', authenticate, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const {
     name,
     client_name,
@@ -86,38 +132,47 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => 
     business_model,
     payment_category,
     sector,
+    status = 'not_started',
   } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: 'name is required.' });
-  }
+  const validationError = validateProjectFields({
+    name, client_name, client_address, manager, sector, business_model, payment_category, status,
+  }, { creating: true });
+  if (validationError) return res.status(400).json({ error: validationError });
   if (!isValidBusinessModelPaymentCategory(business_model, payment_category)) {
     return res.status(400).json({ error: `payment_category '${payment_category}' is not valid for business model '${business_model}'.` });
   }
 
   const id = uuid();
-  db.prepare(
-    `INSERT INTO projects (id, name, client_name, client_address, client_contact, description, manager, system_size_kwp, business_model, payment_category, sector, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    id,
-    name,
-    client_name || null,
-    client_address || null,
-    client_contact || null,
-    description || null,
-    manager || null,
-    system_size_kwp || 0,
-    business_model || null,
-    payment_category || null,
-    sector || null,
-    req.user.id
-  );
-  logAction({ user: req.user, action: 'project.create', entityType: 'project', entityId: id, details: { name } });
-  res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(id));
+  const createProject = db.transaction(() => {
+    const projectRef = nextProjectReference();
+    db.prepare(
+      `INSERT INTO projects (id, project_ref, name, client_name, client_address, client_contact, description, manager, system_size_kwp, business_model, payment_category, sector, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      projectRef,
+      name.trim(),
+      client_name.trim(),
+      client_address.trim(),
+      client_contact?.trim() || null,
+      description?.trim() || null,
+      manager.trim(),
+      system_size_kwp || 0,
+      business_model,
+      payment_category,
+      sector,
+      status,
+      req.user.id
+    );
+    return db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+  });
+  const project = createProject.immediate();
+  logAction({ user: req.user, action: 'project.create', entityType: 'project', entityId: id, details: { name, project_ref: project.project_ref } });
+  res.status(201).json(project);
 });
 
-router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/:id', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Project not found.' });
@@ -140,20 +195,11 @@ router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) =
     sector,
   } = req.body;
 
-  // Business model / payment category can only be changed by an admin while the project is
-  // still a prospect; once quoting has moved on, only a super_admin can revise it.
-  const changingModelOrCategory =
-    (business_model !== undefined && business_model !== existing.business_model) ||
-    (payment_category !== undefined && payment_category !== existing.payment_category);
-  if (changingModelOrCategory && existing.status !== 'prospect' && req.user.role !== 'super_admin') {
-    return res.status(403).json({ error: 'Only a super admin can change the business model or payment category once quoting has moved past prospect.' });
-  }
-  if (status !== undefined && req.user.role !== 'super_admin') {
-    return res.status(403).json({ error: 'Only a super admin can set project status directly.' });
-  }
+  const validationError = validateProjectFields(req.body);
+  if (validationError) return res.status(400).json({ error: validationError });
 
-  const finalBusinessModel = business_model ?? existing.business_model;
-  const finalPaymentCategory = payment_category ?? existing.payment_category;
+  const finalBusinessModel = business_model === undefined ? existing.business_model : (business_model || null);
+  const finalPaymentCategory = payment_category === undefined ? existing.payment_category : (payment_category || null);
   if (!isValidBusinessModelPaymentCategory(finalBusinessModel, finalPaymentCategory)) {
     return res.status(400).json({ error: `payment_category '${finalPaymentCategory}' is not valid for business model '${finalBusinessModel}'.` });
   }
@@ -174,7 +220,7 @@ router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) =
     system_size_kwp ?? existing.system_size_kwp,
     finalBusinessModel,
     finalPaymentCategory,
-    sector ?? existing.sector,
+    sector === undefined ? existing.sector : (sector || null),
     start_date ?? existing.start_date,
     end_date ?? existing.end_date,
     notes ?? existing.notes,
@@ -183,6 +229,70 @@ router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) =
   );
   logAction({ user: req.user, action: 'project.update', entityType: 'project', entityId: req.params.id });
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
+});
+
+router.post('/:id/planned-materials', authenticate, authorizeDepartment('engineering'), (req, res) => {
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found.' });
+
+  const { product_id, quantity } = req.body;
+  const qty = Number(quantity);
+  if (!product_id || !Number.isFinite(qty) || qty <= 0) {
+    return res.status(400).json({ error: 'Select a product and enter a quantity greater than zero.' });
+  }
+  const product = db.prepare("SELECT id FROM products WHERE id = ? AND status = 'Approved'").get(product_id);
+  if (!product) return res.status(400).json({ error: 'Select an approved product from the inventory catalogue.' });
+
+  const id = uuid();
+  db.prepare(
+    'INSERT INTO planned_project_materials (id, project_id, product_id, quantity, created_by) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, req.params.id, product_id, qty, req.user.id);
+  logAction({ user: req.user, action: 'project.material_plan_create', entityType: 'planned_project_material', entityId: id, details: { project_id: req.params.id, product_id, quantity: qty } });
+  res.status(201).json(
+    db.prepare(
+      `SELECT ppm.*, p.model AS product_name, p.unit, p.category
+       FROM planned_project_materials ppm JOIN products p ON p.id = ppm.product_id
+       WHERE ppm.id = ?`
+    ).get(id)
+  );
+});
+
+router.put('/:id/planned-materials/:materialId', authenticate, authorizeDepartment('engineering'), (req, res) => {
+  const existing = db.prepare(
+    'SELECT * FROM planned_project_materials WHERE id = ? AND project_id = ?'
+  ).get(req.params.materialId, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Planned material not found.' });
+
+  const productId = req.body.product_id ?? existing.product_id;
+  const quantity = Number(req.body.quantity ?? existing.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return res.status(400).json({ error: 'Quantity must be greater than zero.' });
+  }
+  const product = db.prepare("SELECT id FROM products WHERE id = ? AND status = 'Approved'").get(productId);
+  if (!product) return res.status(400).json({ error: 'Select an approved product from the inventory catalogue.' });
+
+  db.prepare(
+    `UPDATE planned_project_materials
+     SET product_id = ?, quantity = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(productId, quantity, existing.id);
+  logAction({ user: req.user, action: 'project.material_plan_update', entityType: 'planned_project_material', entityId: existing.id });
+  res.json(
+    db.prepare(
+      `SELECT ppm.*, p.model AS product_name, p.unit, p.category
+       FROM planned_project_materials ppm JOIN products p ON p.id = ppm.product_id
+       WHERE ppm.id = ?`
+    ).get(existing.id)
+  );
+});
+
+router.delete('/:id/planned-materials/:materialId', authenticate, authorizeDepartment('engineering'), (req, res) => {
+  const result = db.prepare(
+    'DELETE FROM planned_project_materials WHERE id = ? AND project_id = ?'
+  ).run(req.params.materialId, req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Planned material not found.' });
+  logAction({ user: req.user, action: 'project.material_plan_delete', entityType: 'planned_project_material', entityId: req.params.materialId });
+  res.status(204).send();
 });
 
 // Super admin can delete a project outright.
@@ -198,7 +308,7 @@ router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {
 
 // A regular admin can only flag a project for deletion — a super admin has to approve it
 // (see POST /:id/approve-delete) before it's actually removed.
-router.post('/:id/request-delete', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/:id/request-delete', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Project not found.' });
@@ -208,7 +318,7 @@ router.post('/:id/request-delete', authenticate, authorize('admin', 'super_admin
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id));
 });
 
-router.post('/:id/cancel-delete-request', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/:id/cancel-delete-request', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Project not found.' });
@@ -243,7 +353,7 @@ router.post('/:id/approve-delete', authenticate, authorize('super_admin'), (req,
 });
 
 // ── Engineers ────────────────────────────────────────────────────────────
-router.post('/:id/engineers', authenticate, (req, res) => {
+router.post('/:id/engineers', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const { name, role, date_assigned, date_completed, notes } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'name is required.' });
@@ -257,7 +367,7 @@ router.post('/:id/engineers', authenticate, (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM project_engineers WHERE id = ?').get(id));
 });
 
-router.put('/engineers/:engineerId', authenticate, (req, res) => {
+router.put('/engineers/:engineerId', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const existing = db.prepare('SELECT * FROM project_engineers WHERE id = ?').get(req.params.engineerId);
   if (!existing) {
     return res.status(404).json({ error: 'Engineer assignment not found.' });
@@ -274,7 +384,7 @@ router.put('/engineers/:engineerId', authenticate, (req, res) => {
 // Logging a material on a project must stay in sync with inventory: only in-stock, approved
 // products can be selected, and logging one creates a matching "Used in Project (OUT)" stock
 // movement so the product's current stock reflects the usage (once that movement is approved).
-router.post('/:id/materials', authenticate, (req, res) => {
+router.post('/:id/materials', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const { date, product_id, quantity } = req.body;
   if (!product_id || !quantity) {
     return res.status(400).json({ error: 'product_id and quantity are required.' });
@@ -298,29 +408,32 @@ router.post('/:id/materials', authenticate, (req, res) => {
   }
 
   const materialDate = date || new Date().toISOString().slice(0, 10);
-  const id = uuid();
-  db.prepare(
-    `INSERT INTO project_materials (id, date, project_id, product_id, quantity, created_by)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(id, materialDate, req.params.id, product_id, qty, req.user.id);
-  logAction({ user: req.user, action: 'project.material_log', entityType: 'project_material', entityId: id, details: { project_id: req.params.id, product_id, quantity: qty } });
+  const createStockOut = db.transaction(() => {
+    const id = uuid();
+    db.prepare(
+      `INSERT INTO project_materials (id, date, project_id, product_id, quantity, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(id, materialDate, req.params.id, product_id, qty, req.user.id);
+    logAction({ user: req.user, action: 'project.material_log', entityType: 'project_material', entityId: id, details: { project_id: req.params.id, product_id, quantity: qty } });
 
-  const movementId = nextId('MV', 'stock_movements');
-  const autoApprove = req.user.role === 'super_admin' || !isApprovalRequired();
-  const status = autoApprove ? 'Approved' : 'Pending';
-  const approvedBy = autoApprove ? req.user.id : null;
-  const approvedAt = autoApprove ? new Date().toISOString() : null;
-  db.prepare(
-    `INSERT INTO stock_movements (id, date, product_id, movement_type, quantity, condition, source, recorded_by, status, approved_by, approved_at, notes)
-     VALUES (?, ?, ?, 'Used in Project (OUT)', ?, 'New', ?, ?, ?, ?, ?, ?)`
-  ).run(movementId, materialDate, product_id, qty, `Project: ${project.name}`, req.user.id, status, approvedBy, approvedAt, `Logged from project material usage (project_material ${id})`);
-  logAction({ user: req.user, action: 'stock_movement.create', entityType: 'stock_movement', entityId: movementId, details: { movement_type: 'Used in Project (OUT)', quantity: qty, product_id, status } });
+    const movementId = nextId('MV', 'stock_movements');
+    const autoApprove = req.user.role === 'super_admin' || !isApprovalRequired();
+    const status = autoApprove ? 'Approved' : 'Pending';
+    const approvedBy = autoApprove ? req.user.id : null;
+    const approvedAt = autoApprove ? new Date().toISOString() : null;
+    db.prepare(
+      `INSERT INTO stock_movements (id, date, product_id, movement_type, quantity, condition, source, recorded_by, status, approved_by, approved_at, notes)
+       VALUES (?, ?, ?, 'Used in Project (OUT)', ?, 'New', ?, ?, ?, ?, ?, ?)`
+    ).run(movementId, materialDate, product_id, qty, `Project: ${project.name}`, req.user.id, status, approvedBy, approvedAt, `Logged from project material usage (project_material ${id})`);
+    logAction({ user: req.user, action: 'stock_movement.create', entityType: 'stock_movement', entityId: movementId, details: { movement_type: 'Used in Project (OUT)', quantity: qty, product_id, status } });
+    return db.prepare('SELECT * FROM project_materials WHERE id = ?').get(id);
+  });
 
-  res.status(201).json(db.prepare('SELECT * FROM project_materials WHERE id = ?').get(id));
+  res.status(201).json(createStockOut());
 });
 
 // ── Costs ────────────────────────────────────────────────────────────────
-router.post('/:id/costs', authenticate, (req, res) => {
+router.post('/:id/costs', authenticate, authorizeDepartment('engineering'), (req, res) => {
   const { item_name, cost, notes } = req.body;
   if (!item_name || cost === undefined) {
     return res.status(400).json({ error: 'item_name and cost are required.' });

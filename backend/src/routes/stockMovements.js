@@ -1,13 +1,13 @@
 const express = require('express');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
 const { isApprovalRequired } = require('../services/settingsService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const movements = db
     .prepare(
       `SELECT m.*, u.name AS recorded_by_name, p.model AS product_name, p.category, p.unit
@@ -20,7 +20,7 @@ router.get('/', authenticate, (req, res) => {
   res.json(movements);
 });
 
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { date, product_id, movement_type, quantity, condition, source, notes } = req.body;
   if (!product_id || !quantity || !movement_type) {
     return res.status(400).json({ error: 'product_id, movement_type and quantity are required.' });

@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import ProjectForm from './pages/ProjectForm';
 import ProjectDetail from './pages/ProjectDetail';
 import QuoteEditor from './pages/QuoteEditor';
 import QuoteHistory from './pages/QuoteHistory';
@@ -43,21 +44,22 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="projects" element={<Projects />} />
-        <Route path="projects/:projectId" element={<ProjectDetail />} />
-        <Route path="projects/:projectId/quotes/new" element={<QuoteEditor />} />
-        <Route path="quotes/:quoteId/edit" element={<QuoteEditor />} />
-        <Route path="quotes/:quoteId/history" element={<QuoteHistory />} />
-        <Route path="products" element={<Products />} />
-        <Route path="products/:productId" element={<ProductDetail />} />
-        <Route path="stock-movements" element={<StockMovements />} />
-        <Route path="categories" element={<Categories />} />
-        <Route path="returns" element={<Returns />} />
-        <Route path="battery-collections" element={<BatteryCollections />} />
+        <Route path="projects" element={<ProtectedRoute departments={['engineering']}><Projects /></ProtectedRoute>} />
+        <Route path="projects/new" element={<ProtectedRoute departments={['engineering']}><ProjectForm /></ProtectedRoute>} />
+        <Route path="projects/:projectId" element={<ProtectedRoute departments={['engineering', 'finance']}><ProjectDetail /></ProtectedRoute>} />
+        <Route path="projects/:projectId/quotes/new" element={<ProtectedRoute roles={['super_admin']}><QuoteEditor /></ProtectedRoute>} />
+        <Route path="quotes/:quoteId/edit" element={<ProtectedRoute roles={['super_admin']}><QuoteEditor /></ProtectedRoute>} />
+        <Route path="quotes/:quoteId/history" element={<ProtectedRoute roles={['super_admin']}><QuoteHistory /></ProtectedRoute>} />
+        <Route path="products" element={<ProtectedRoute departments={['finance']}><Products /></ProtectedRoute>} />
+        <Route path="products/:productId" element={<ProtectedRoute departments={['finance']}><ProductDetail /></ProtectedRoute>} />
+        <Route path="stock-movements" element={<ProtectedRoute departments={['finance']}><StockMovements /></ProtectedRoute>} />
+        <Route path="categories" element={<ProtectedRoute departments={['finance']}><Categories /></ProtectedRoute>} />
+        <Route path="returns" element={<ProtectedRoute departments={['finance']}><Returns /></ProtectedRoute>} />
+        <Route path="battery-collections" element={<ProtectedRoute departments={['finance']}><BatteryCollections /></ProtectedRoute>} />
         <Route
           path="payment-tracker"
           element={
-            <ProtectedRoute roles={['super_admin']}>
+            <ProtectedRoute departments={['finance']}>
               <PaymentTracker />
             </ProtectedRoute>
           }
@@ -65,7 +67,7 @@ export default function App() {
         <Route
           path="payment-tracker/:planId"
           element={
-            <ProtectedRoute roles={['super_admin']}>
+            <ProtectedRoute departments={['finance']}>
               <PaymentTrackerDetail />
             </ProtectedRoute>
           }
@@ -73,7 +75,7 @@ export default function App() {
         <Route
           path="payment-tracker/:planId/update"
           element={
-            <ProtectedRoute roles={['super_admin']}>
+            <ProtectedRoute departments={['finance']}>
               <PaymentUpdate />
             </ProtectedRoute>
           }
@@ -86,7 +88,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="settings" element={<Settings />} />
+        <Route path="settings" element={<ProtectedRoute roles={['super_admin']}><Settings /></ProtectedRoute>} />
         <Route path="change-password" element={<ChangePassword />} />
         <Route
           path="users"
@@ -96,14 +98,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="company-profile"
-          element={
-            <ProtectedRoute roles={['admin', 'super_admin']}>
-              <CompanyProfile />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="company-profile" element={<ProtectedRoute roles={['super_admin']}><CompanyProfile /></ProtectedRoute>} />
         <Route
           path="audit-trail"
           element={
@@ -112,13 +107,13 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="reports" element={<Reports />} />
-        <Route path="reports/stock-movements" element={<StockMovementReport />} />
-        <Route path="reports/products" element={<ProductReport />} />
-        <Route path="invoices" element={<DocumentsList docType="invoice" />} />
-        <Route path="invoices/new" element={<DocumentEditor docType="invoice" />} />
-        <Route path="receipts" element={<DocumentsList docType="receipt" />} />
-        <Route path="receipts/new" element={<DocumentEditor docType="receipt" />} />
+        <Route path="reports" element={<ProtectedRoute departments={['finance']}><Reports /></ProtectedRoute>} />
+        <Route path="reports/stock-movements" element={<ProtectedRoute departments={['finance']}><StockMovementReport /></ProtectedRoute>} />
+        <Route path="reports/products" element={<ProtectedRoute departments={['finance']}><ProductReport /></ProtectedRoute>} />
+        <Route path="invoices" element={<ProtectedRoute departments={['finance']}><DocumentsList docType="invoice" /></ProtectedRoute>} />
+        <Route path="invoices/new" element={<ProtectedRoute departments={['finance']}><DocumentEditor docType="invoice" /></ProtectedRoute>} />
+        <Route path="receipts" element={<ProtectedRoute departments={['finance']}><DocumentsList docType="receipt" /></ProtectedRoute>} />
+        <Route path="receipts/new" element={<ProtectedRoute departments={['finance']}><DocumentEditor docType="receipt" /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

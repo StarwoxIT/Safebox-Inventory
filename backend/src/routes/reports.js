@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorizeDepartment } = require('../middleware/auth');
 const { getStockMovementReport, getProductReport } = require('../services/reportService');
 const { buildWorkbookBuffer } = require('../services/excelService');
 const { renderStockMovementReportPdf, renderProductReportPdf } = require('../services/pdfService');
@@ -36,12 +36,12 @@ const PRODUCT_COLUMNS = [
   { header: 'Added', key: 'createdAt', width: 18 },
 ];
 
-router.get('/stock-movements', authenticate, (req, res) => {
+router.get('/stock-movements', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { from, to, category, subcategory } = req.query;
   res.json(getStockMovementReport({ from, to, category, subcategory }));
 });
 
-router.get('/stock-movements/export', authenticate, async (req, res) => {
+router.get('/stock-movements/export', authenticate, authorizeDepartment('finance'), async (req, res) => {
   const { from, to, category, subcategory, format } = req.query;
   const report = getStockMovementReport({ from, to, category, subcategory });
   try {
@@ -62,12 +62,12 @@ router.get('/stock-movements/export', authenticate, async (req, res) => {
   }
 });
 
-router.get('/products', authenticate, (req, res) => {
+router.get('/products', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { category, subcategory, from, to } = req.query;
   res.json(getProductReport({ category, subcategory, from, to }));
 });
 
-router.get('/products/export', authenticate, async (req, res) => {
+router.get('/products/export', authenticate, authorizeDepartment('finance'), async (req, res) => {
   const { category, subcategory, from, to, format } = req.query;
   const report = getProductReport({ category, subcategory, from, to });
   try {

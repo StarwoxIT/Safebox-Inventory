@@ -1,23 +1,23 @@
 const express = require('express');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const documentService = require('../services/documentService');
 const { renderDocumentPdf } = require('../services/pdfService');
 const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { type } = req.query;
   res.json(documentService.listDocuments({ type }));
 });
 
-router.get('/:id', authenticate, (req, res) => {
+router.get('/:id', authenticate, authorizeDepartment('finance'), (req, res) => {
   const doc = documentService.getDocument(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
   res.json(doc);
 });
 
-router.get('/:id/pdf', authenticate, async (req, res) => {
+router.get('/:id/pdf', authenticate, authorizeDepartment('finance'), async (req, res) => {
   const doc = documentService.getDocument(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
   try {
@@ -33,7 +33,7 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
   }
 });
 
-router.post('/preview/pdf', authenticate, async (req, res) => {
+router.post('/preview/pdf', authenticate, authorizeDepartment('finance'), async (req, res) => {
   try {
     const doc = documentService.previewDocument(req.body);
     const pdfBuffer = await renderDocumentPdf(doc);
@@ -49,7 +49,7 @@ router.post('/preview/pdf', authenticate, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { type, project_id, quotation_id, client_name, client_address, client_contact, issue_date, items, vat_percent, amount_paid, notes } = req.body;
   try {
     const doc = documentService.createDocument({

@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const quoteService = require('../services/quoteService');
 const { renderQuotationPdf } = require('../services/pdfService');
 const { logAction } = require('../services/auditService');
@@ -9,7 +9,7 @@ const { logAction } = require('../services/auditService');
 const router = express.Router();
 
 // GET /quotes/:projectId -> list all quotation options for a project
-router.get('/:projectId', authenticate, (req, res) => {
+router.get('/:projectId', authenticate, authorizeDepartment('finance'), (req, res) => {
   const quotations = db
     .prepare('SELECT * FROM quotations WHERE project_id = ? ORDER BY option_number')
     .all(req.params.projectId);
@@ -18,7 +18,7 @@ router.get('/:projectId', authenticate, (req, res) => {
 });
 
 // GET /quotes/detail/:id -> single quotation with items
-router.get('/detail/:id', authenticate, (req, res) => {
+router.get('/detail/:id', authenticate, authorizeDepartment('finance'), (req, res) => {
   const quotation = quoteService.getQuotationWithItems(req.params.id);
   if (!quotation) {
     return res.status(404).json({ error: 'Quotation not found.' });
@@ -27,7 +27,7 @@ router.get('/detail/:id', authenticate, (req, res) => {
 });
 
 // GET /quotes/:id/versions -> version/history list
-router.get('/:id/versions', authenticate, (req, res) => {
+router.get('/:id/versions', authenticate, authorizeDepartment('finance'), (req, res) => {
   const versions = db
     .prepare(
       `SELECT v.id, v.version_number, v.change_type, v.created_at, u.name AS changed_by_name
@@ -41,7 +41,7 @@ router.get('/:id/versions', authenticate, (req, res) => {
 });
 
 // GET /quotes/:id/pdf -> generate and stream PDF
-router.get('/:id/pdf', authenticate, async (req, res) => {
+router.get('/:id/pdf', authenticate, authorizeDepartment('finance'), async (req, res) => {
   const quotation = quoteService.getQuotationWithItems(req.params.id);
   if (!quotation) {
     return res.status(404).json({ error: 'Quotation not found.' });
@@ -61,7 +61,7 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
 });
 
 // POST /quotes -> create a new quotation option for a project (only while the project is a 'prospect')
-router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/', authenticate, authorize('super_admin'), (req, res) => {
   const { project_id, option_number, title, power_description, markup_percent, items } = req.body;
 
   if (!project_id || !Array.isArray(items) || items.length === 0) {
@@ -97,7 +97,7 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => 
 });
 
 // PUT /quotes/:id/select -> mark this option as the one the client picked (or unmark it)
-router.put('/:id/select', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/:id/select', authenticate, authorize('super_admin'), (req, res) => {
   const quotation = db.prepare('SELECT * FROM quotations WHERE id = ?').get(req.params.id);
   if (!quotation) {
     return res.status(404).json({ error: 'Quotation not found.' });
@@ -135,7 +135,7 @@ router.put('/:id/select', authenticate, authorize('admin', 'super_admin'), (req,
 // PUT /quotes/:id -> edit quotation (items, markup, description, status)
 // Allowed for admin only while the project is still 'prospect'; once quoting has moved past
 // prospect (a quote was selected), only a super_admin can still edit the locked/selected quote.
-router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/:id', authenticate, authorize('super_admin'), (req, res) => {
   const existing = db.prepare('SELECT * FROM quotations WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Quotation not found.' });

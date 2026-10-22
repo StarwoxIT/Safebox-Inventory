@@ -13,7 +13,7 @@ function authenticate(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const current = db.prepare('SELECT id, name, email, role, status FROM users WHERE id = ?').get(payload.id);
+    const current = db.prepare('SELECT id, name, email, role, department, status FROM users WHERE id = ?').get(payload.id);
     if (!current) {
       return res.status(401).json({ error: 'This account no longer exists. Please sign in again.' });
     }
@@ -39,4 +39,17 @@ function authorize(...allowedRoles) {
   };
 }
 
-module.exports = { authenticate, authorize, JWT_SECRET };
+function authorizeDepartment(...allowedDepartments) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+    if (req.user.role === 'super_admin') return next();
+    if (req.user.role !== 'admin' || !allowedDepartments.includes(req.user.department)) {
+      return res.status(403).json({ error: 'Your department does not have access to this module.' });
+    }
+    return next();
+  };
+}
+
+module.exports = { authenticate, authorize, authorizeDepartment, JWT_SECRET };

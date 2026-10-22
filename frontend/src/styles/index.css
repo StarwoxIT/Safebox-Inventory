@@ -510,7 +510,7 @@ textarea:focus {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -524,6 +524,230 @@ textarea:focus {
   align-items: center;
   gap: 14px;
   box-shadow: var(--shadow-sm);
+}
+
+.stat-filter-card {
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-filter-card.selected {
+  border-color: var(--brand-green);
+}
+
+.project-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.project-filters input {
+  width: 220px;
+}
+
+.projects-overview .project-summary-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.stat-filter-card > span {
+  display: grid;
+  gap: 4px;
+}
+
+.project-list-section {
+  margin-top: 28px;
+}
+
+.project-list-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.project-list-toolbar h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.project-list-toolbar .page-subtitle {
+  display: block;
+  margin: 0;
+}
+
+.project-list-toolbar .project-filters {
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.project-search input {
+  width: 270px;
+}
+
+.project-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.project-table {
+  min-width: 930px;
+}
+
+.project-table th,
+.project-table td {
+  padding: 14px 12px;
+}
+
+.project-table-row {
+  cursor: pointer;
+}
+
+.project-table-row:focus-visible,
+.project-mobile-card:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: -2px;
+}
+
+.project-row-action {
+  color: var(--text-muted);
+}
+
+.project-mobile-list {
+  display: none;
+}
+
+.project-mobile-card {
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.project-mobile-card-header,
+.project-mobile-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-mobile-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.project-mobile-reference {
+  margin: 8px 0 14px;
+  color: var(--text-muted);
+}
+
+.project-mobile-card-footer > span:first-child {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.project-mobile-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.project-reference-detail {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+}
+
+.project-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.project-section-heading h2 {
+  margin: 0 0 6px;
+}
+
+.project-section-heading .page-subtitle {
+  margin: 0;
+}
+
+.planned-material-form {
+  margin: 16px 0 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.planned-material-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.actual-materials-section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.actual-materials-section h3 {
+  margin: 0 0 6px;
+}
+
+.project-form {
+  max-width: 880px;
+  margin: 0 auto 24px;
+}
+
+.project-form-section {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.project-form-section h2 {
+  margin: 0 0 6px;
+}
+
+.project-form-section .page-subtitle {
+  margin: 0;
+}
+
+.project-form-actions {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.field-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .stat-icon {
@@ -1019,6 +1243,54 @@ textarea:focus {
 
   .stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .projects-overview .project-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .projects-overview .project-summary-grid .stat-card {
+    padding: 14px;
+  }
+
+  .project-list-toolbar {
+    flex-direction: column;
+  }
+
+  .project-list-toolbar .project-filters {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .project-list-toolbar .project-filters > * {
+    min-width: 0;
+    flex: 1 1 145px;
+  }
+
+  .project-search input {
+    width: 100%;
+  }
+
+  .project-table-wrap {
+    display: none;
+  }
+
+  .project-mobile-list {
+    display: block;
+  }
+
+  .project-form {
+    padding: 16px;
+  }
+
+  .project-section-heading {
+    flex-direction: column;
+  }
+
+  .project-form-actions {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .totals-summary {

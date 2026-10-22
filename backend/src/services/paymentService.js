@@ -54,7 +54,10 @@ function createPaymentPlan({ projectId, quotationId, depositPercent, installment
     throw Object.assign(new Error('This project has no payment category set.'), { status: 400 });
   }
 
-  const category = project.payment_category;
+  const category = {
+    one_time_payment: 'full_payment',
+    instalment_payments: 'installments',
+  }[project.payment_category] || project.payment_category;
   const totalAmount = quotation.grand_total;
   const deposit = round2(totalAmount * ((depositPercent || 0) / 100));
   const planId = uuid();

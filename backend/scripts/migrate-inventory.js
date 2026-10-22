@@ -15,8 +15,8 @@
  * on the pre-unification azu/development branch):
  *  - users.role: 'Super Admin' -> 'super_admin', 'Admin' -> 'admin'. Users with no
  *    password_hash (never accepted their invite) are skipped — they can't log in anyway.
- *  - projects.status: Planning->prospect, Active->on_going, 'On Hold'->on_going,
- *    Completed->completed, Cancelled->rejected. Flagged as best-effort; review manually.
+ *  - projects.status: Planning->prospect, Active->on_going, 'On Hold'->on_hold,
+ *    Completed->completed, Cancelled->cancelled. Flagged as best-effort; review manually.
  *  - projects.system_size_kwp <- system_size_kwp: same column name and unit in both
  *    schemas, carried over as-is.
  *  - business_model and payment_category have no equivalent field in the old schema
@@ -26,13 +26,14 @@
 const path = require('path');
 const Database = require('better-sqlite3');
 const db = require('../src/db');
+const { nextProjectReference } = require('../src/services/projectService');
 
 const STATUS_MAP = {
   Planning: 'prospect',
   Active: 'on_going',
-  'On Hold': 'on_going',
+  'On Hold': 'on_hold',
   Completed: 'completed',
-  Cancelled: 'rejected',
+  Cancelled: 'cancelled',
 };
 
 function parseArgs() {
@@ -83,10 +84,11 @@ function main() {
   }
   insertOrSkip('users', usableUsers, (u) => {
     const role = u.role === 'Super Admin' ? 'super_admin' : 'admin';
+    const department = role === 'super_admin' ? null : 'finance';
     const status = u.status === 'Inactive' ? 'Inactive' : 'Active';
     db.prepare(
-      'INSERT INTO users (id, name, email, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(u.id, u.name, u.email, u.password_hash, role, status, u.created_at);
+      'INSERT INTO users (id, name, email, password_hash, role, department, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(u.id, u.name, u.email, u.password_hash, role, department, status, u.created_at);
     migratedUserIds.add(u.id);
   });
   const mapUserId = (id) => (id && migratedUserIds.has(id) ? id : null);
@@ -127,10 +129,10 @@ function main() {
     if (!STATUS_MAP[p.status]) warnings.push(`Project ${p.id}: unrecognized status '${p.status}', defaulted to 'prospect'.`);
     const sector = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting'].includes(p.project_type) ? p.project_type : (p.project_type ? 'Other' : null);
     db.prepare(
-      `INSERT INTO projects (id, name, client_name, status, sector, manager, system_size_kwp, start_date, end_date, notes, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (id, project_ref, name, client_name, status, sector, manager, system_size_kwp, start_date, end_date, notes, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      p.id, p.name, p.client || null, status, sector,
+      p.id, nextProjectReference(), p.name, p.client || null, status, sector,
       p.manager || null, p.system_size_kwp || 0, p.start_date || null, p.end_date || null,
       p.notes || null, mapUserId(p.created_by), p.created_at
     );

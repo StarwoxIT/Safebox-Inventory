@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, authorizeDepartment } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 const { nextId } = require('../services/idService');
 const { isApprovalRequired } = require('../services/settingsService');
@@ -8,17 +8,21 @@ const { previewProductIdMapping, applyProductIdMapping } = require('../services/
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const products = db.prepare('SELECT * FROM products ORDER BY category, model').all();
   res.json(products);
 });
 
-router.get('/stock', authenticate, (req, res) => {
+router.get('/stock', authenticate, authorizeDepartment('finance', 'engineering'), (req, res) => {
   const IN_TYPES = "'Purchase (IN)','Return (IN)','Transfer IN','Client Return to Stock','Project Return to Stock'";
   const OUT_TYPES = "'Used in Project (OUT)','Sale (OUT)','Transfer OUT','Damaged/Written Off','Adjustment'";
+  const canViewInventoryDetails = req.user.role === 'super_admin' || req.user.department === 'finance';
+  const inventoryColumns = canViewInventoryDetails
+    ? ', p.min_threshold, p.max_threshold, p.unit_cost, p.status'
+    : '';
   const stock = db
     .prepare(
-      `SELECT p.id, p.model, p.category, p.unit, p.min_threshold, p.max_threshold, p.unit_cost, p.status,
+      `SELECT p.id, p.model, p.category, p.unit${inventoryColumns},
         COALESCE((SELECT SUM(quantity) FROM stock_movements WHERE product_id = p.id AND movement_type IN (${IN_TYPES}) AND status = 'Approved'), 0)
         - COALESCE((SELECT SUM(quantity) FROM stock_movements WHERE product_id = p.id AND movement_type IN (${OUT_TYPES}) AND status = 'Approved'), 0)
         + COALESCE((SELECT SUM(quantity) FROM returns WHERE product_id = p.id AND (return_type = 'Project Return' OR reconciled = 1)), 0)
@@ -50,7 +54,7 @@ router.post('/normalize-ids', authenticate, authorize('super_admin'), (req, res)
   res.json({ mapping, backupPath });
 });
 
-router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { category, subcategory, brand, model, unit, min_threshold, max_threshold, unit_cost, notes } = req.body;
   if (!model || !category) {
     return res.status(400).json({ error: 'category and model are required.' });
@@ -83,7 +87,7 @@ router.post('/', authenticate, authorize('admin', 'super_admin'), (req, res) => 
   res.status(201).json(db.prepare('SELECT * FROM products WHERE id = ?').get(id));
 });
 
-router.put('/:id', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/:id', authenticate, authorizeDepartment('finance'), (req, res) => {
   const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
   if (!existing) {
     return res.status(404).json({ error: 'Product not found.' });

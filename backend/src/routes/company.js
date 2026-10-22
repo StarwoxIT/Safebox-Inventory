@@ -5,11 +5,11 @@ const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorize('super_admin'), (req, res) => {
   res.json(getCompanyProfile());
 });
 
-router.put('/', authenticate, authorize('admin', 'super_admin'), (req, res) => {
+router.put('/', authenticate, authorize('super_admin'), (req, res) => {
   const {
     name,
     regNumber,
