@@ -111,13 +111,12 @@ No new environment variables were introduced by any of the unified-portal work (
 
 ## Core Concepts
 
-### Projects (Inventory + Quotation + Execution, unified)
-- **Projects** are the single entry point covering a client engagement from prospect through completion — merging what used to be separate "Job" and "Project" records.
-- **Status:** `Prospect` → `Quote Accepted` → `On-going` (or `Active (EaaS)` for metered engagements) → `Completed` / `Rejected`.
-- **Business Model:** `Outright Purchase`, `EaaS`, `Repair Service`, `Maintenance Service`, `Upgrade`.
-- **Payment Category:** `Full Payment`, `Installments`, `Pay as you Go` — constrained by business model (`EaaS` only allows `Pay as you Go`; every other business model allows `Full Payment` or `Installments`).
-- Each project can have 5-6 **quotation options** (`OPTION 1`, `OPTION 2`, ...), but **new quotation options can only be added while the project is in `Prospect` status**. Once a client's chosen option is marked selected, the project moves to `Quote Accepted` and quoting locks — only a **Super Admin** can still edit the selected option after that.
-- Projects also track **materials used** (drawn from the product catalog), **engineers assigned**, and **other costs** — all rolled up into a total project cost.
+### Projects (confirmed customer work)
+- **Projects** track confirmed customer work and receive unique `PRJ-###` references.
+- Project statuses are `Not Started`, `In Progress`, `On Hold`, `Completed`, and `Cancelled`.
+- Project records include the client, optional project contact, site address, project manager, sector, business model, payment type, description, and creation date.
+- Planned materials are selected from the approved inventory catalogue and stored separately from issued stock. Planning or revising quantities does not create a stock movement; actual stock issues must be recorded through the stock-movement workflow.
+- Project creation and updates are available to Engineering Admins and Super Admins; Finance Admins have read access for invoicing.
 
 ### Quotations
 - Each quotation option has line items (catalog-selected or custom), an internal `unit_cost` used to compute `subtotal`, and a `markup_percent` applied to reach `grand_total` (the final client-facing price).
@@ -130,7 +129,7 @@ No new environment variables were introduced by any of the unified-portal work (
 - **Returns** (client or project) and **Battery Collections** are tracked separately, with OEM reconciliation fields on returns.
 
 ### Payments
-Once a project's quotation is selected (`status = 'quote_accepted'`), an admin creates a **Payment Plan** using the project's payment category:
+Once a project's quotation is selected (`status = 'quote_accepted'`), a Finance Admin or Super Admin creates a **Payment Plan** using the project's payment category:
 - **Full Payment:** a deposit milestone (before installation) + a balance-on-completion milestone.
 - **Installments:** a deposit milestone + N equal installments spread by day/week/month.
 - **Pay as you Go (EaaS):** an optional small deployment deposit, then open-ended **usage billing periods** (meter readings × rate) logged and marked paid over time.
@@ -142,12 +141,13 @@ Every login and every create/update/delete/select/approve/payment action across 
 
 ## Roles
 
-| Role        | Permissions |
-|-------------|-------------|
-| Admin       | Day-to-day access: create/edit projects, add quotation options while a project is in Prospect, create products/stock movements (as Pending), log materials/engineers/costs, create payment plans and record payments |
-| Super Admin | Everything Admin can do, plus: approve/reject pending products & stock movements, manage users, view the audit trail, edit the company profile, delete records, and edit a locked/selected quotation after quoting has moved past Prospect |
+| Role | Department | Permissions |
+|------|------------|-------------|
+| Super Admin | Management | Overall oversight, user administration, approvals, and access to all modules |
+| Admin | Finance | Inventory, invoices, receipts, payment tracking, and inventory/financial reports, subject to module permissions. Can read project and quotation data needed to prepare invoices. |
+| Admin | Engineering | Create and view all projects, update project details and progress, assign engineers, and manage planned materials. Project planning does not deduct inventory. |
 
-New users are created by a super admin via the Users page (`POST /api/auth/register`).
+New users are created by a Super Admin via the Users page (`POST /api/auth/register`) and each Admin must be assigned to Finance or Engineering. Existing Admin accounts migrate to Finance; Super Admin accounts have no department. Department permissions are enforced by the backend API as well as the frontend navigation.
 
 ## Migrating data from the legacy standalone inventory system
 

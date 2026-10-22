@@ -1,11 +1,15 @@
 const MAPS = {
   projectStatus: {
-    prospect: { label: 'Prospect', tone: 'neutral' },
-    quote_accepted: { label: 'Quote Accepted', tone: 'info' },
-    on_going: { label: 'On-going', tone: 'warning' },
-    active_eaas: { label: 'Active (EaaS)', tone: 'info' },
+    prospect: { label: 'Not Started', tone: 'neutral' },
+    not_started: { label: 'Not Started', tone: 'neutral' },
+    quote_accepted: { label: 'In Progress', tone: 'info' },
+    on_going: { label: 'In Progress', tone: 'warning' },
+    active_eaas: { label: 'In Progress', tone: 'info' },
+    in_progress: { label: 'In Progress', tone: 'info' },
+    on_hold: { label: 'On Hold', tone: 'warning' },
     completed: { label: 'Completed', tone: 'success' },
-    rejected: { label: 'Rejected', tone: 'danger' },
+    cancelled: { label: 'Cancelled', tone: 'danger' },
+    rejected: { label: 'Cancelled', tone: 'danger' },
   },
   businessModel: {
     outright_purchase: { label: 'Outright Purchase', tone: 'neutral' },
@@ -13,11 +17,20 @@ const MAPS = {
     repair_service: { label: 'Repair Service', tone: 'neutral' },
     maintenance_service: { label: 'Maintenance Service', tone: 'neutral' },
     upgrade: { label: 'Upgrade', tone: 'neutral' },
+    direct_purchase: { label: 'Direct Purchase', tone: 'neutral' },
+    greenband_eaas: { label: 'Greenband (EaaS)', tone: 'info' },
+    upgrade_expansion: { label: 'Upgrade / System Expansion', tone: 'neutral' },
+    installation_only: { label: 'Installation Only', tone: 'neutral' },
+    maintenance_repair: { label: 'Maintenance / Repair Service', tone: 'neutral' },
+    other: { label: 'Other', tone: 'neutral' },
   },
   paymentCategory: {
     full_payment: { label: 'Full Payment', tone: 'success' },
     installments: { label: 'Installments', tone: 'warning' },
     pay_as_you_go: { label: 'Pay as you Go', tone: 'info' },
+    one_time_payment: { label: 'One-time Payment', tone: 'success' },
+    instalment_payments: { label: 'Instalment Payments', tone: 'warning' },
+    other: { label: 'Other', tone: 'neutral' },
   },
   approvalStatus: {
     Pending: { label: 'Pending', tone: 'warning' },
@@ -46,8 +59,11 @@ const MAPS = {
   },
 };
 
-export default function StatusBadge({ type, value }) {
+export default function StatusBadge({ type, value, department }) {
   if (!value) return null;
   const entry = MAPS[type]?.[value] || { label: value, tone: 'neutral' };
-  return <span className={`status-badge tone-${entry.tone}`}>{entry.label}</span>;
+  const label = type === 'role' && value === 'admin' && department
+    ? `${entry.label} — ${department === 'engineering' ? 'Engineering' : 'Finance'}`
+    : entry.label;
+  return <span className={`status-badge tone-${entry.tone}`}>{label}</span>;
 }

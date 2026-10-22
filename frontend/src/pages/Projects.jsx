@@ -1,310 +1,269 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { IconPlus, IconBriefcase, IconFolderOff, IconX } from '@tabler/icons-react';
-import { listProjects, createProject } from '../api/projects';
-import PageHeader from '../components/PageHeader';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { IconBriefcase, IconDotsVertical, IconFolderOff, IconPlus } from '@tabler/icons-react';
+import { listProjects } from '../api/projects';
+import BackButton from '../components/BackButton';
 import EmptyState from '../components/EmptyState';
-import StatusBadge from '../components/StatusBadge';
+import PageHeader from '../components/PageHeader';
 import Pagination from '../components/Pagination';
 import { SkeletonRows } from '../components/Skeleton';
+import StatusBadge from '../components/StatusBadge';
 import usePagination from '../hooks/usePagination';
-import { MONTHS, yearsFrom, filterByDate } from '../utils/dateFilters';
-import BackButton from '../components/BackButton';
 
-const BUSINESS_MODEL_PAYMENT_CATEGORIES = {
-  outright_purchase: ['full_payment', 'installments'],
-  eaas: ['pay_as_you_go'],
-  repair_service: ['full_payment', 'installments'],
-  maintenance_service: ['full_payment', 'installments'],
-  upgrade: ['full_payment', 'installments'],
-};
+const STATUS_GROUPS = [
+  { value: 'not_started', label: 'Not Started', statuses: ['not_started', 'prospect'] },
+  { value: 'in_progress', label: 'In Progress', statuses: ['in_progress', 'quote_accepted', 'on_going', 'active_eaas'] },
+  { value: 'on_hold', label: 'On Hold', statuses: ['on_hold'] },
+  { value: 'completed', label: 'Completed', statuses: ['completed'] },
+  { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled', 'rejected'] },
+];
 
-const BUSINESS_MODEL_LABELS = {
-  outright_purchase: 'Outright Purchase',
-  eaas: 'EaaS',
-  repair_service: 'Repair Service',
-  maintenance_service: 'Maintenance Service',
-  upgrade: 'Upgrade',
-};
+function dateLabel(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
 
-const PAYMENT_CATEGORY_LABELS = {
-  full_payment: 'Full Payment',
-  installments: 'Installments',
-  pay_as_you_go: 'Pay as you Go',
-};
-
-const SECTORS = ['Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting', 'Other'];
-
-const emptyForm = {
-  name: '',
-  client_name: '',
-  client_address: '',
-  client_contact: '',
-  description: '',
-  manager: '',
-  system_size_kwp: '',
-  business_model: '',
-  payment_category: '',
-  sector: '',
-};
+function ProjectActions({ projectId, navigate }) {
+  return (
+    <button
+      type="button"
+      className="icon-btn project-row-action"
+      aria-label="Open project actions"
+      title="Open project"
+      onClick={(event) => {
+        event.stopPropagation();
+        navigate(`/projects/${projectId}`);
+      }}
+    >
+      <IconDotsVertical size={18} />
+    </button>
+  );
+}
 
 export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [sortBy, setSortBy] = useState('date_desc');
-  const [monthFilter, setMonthFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState('');
+  const [managerFilter, setManagerFilter] = useState('');
+  const [sectorFilter, setSectorFilter] = useState('');
 
-  const loadProjects = () => {
-    setLoading(true);
+  useEffect(() => {
+    let active = true;
     listProjects()
-      .then(setProjects)
-      .catch(() => setError('Failed to load projects.'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(loadProjects, []);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => {
-      const next = { ...prev, [name]: value };
-      if (name === 'business_model') {
-        const allowed = BUSINESS_MODEL_PAYMENT_CATEGORIES[value] || [];
-        if (!allowed.includes(prev.payment_category)) {
-          next.payment_category = allowed.length === 1 ? allowed[0] : '';
+      .then((result) => {
+        if (active) {
+          setProjects(result);
+          setError('');
         }
-      }
-      return next;
-    });
-    setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
-
-  const validate = () => {
-    const errors = {};
-    if (!form.name.trim()) errors.name = 'Project name is required.';
-    if (form.business_model && !form.payment_category) {
-      errors.payment_category = 'Choose a payment category for this business model.';
-    }
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!validate()) return;
-    setSubmitting(true);
-    try {
-      const project = await createProject({
-        ...form,
-        system_size_kwp: form.system_size_kwp ? Number(form.system_size_kwp) : 0,
-        business_model: form.business_model || null,
-        payment_category: form.payment_category || null,
-        sector: form.sector || null,
+      })
+      .catch((err) => {
+        if (active) setError(err.response?.data?.error || 'Could not load projects. Please try again.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-      setShowForm(false);
-      setForm(emptyForm);
-      navigate(`/projects/${project.id}`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create project.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    return () => { active = false; };
+  }, []);
 
-  const allowedPaymentCategories = form.business_model
-    ? BUSINESS_MODEL_PAYMENT_CATEGORIES[form.business_model] || []
-    : Object.keys(PAYMENT_CATEGORY_LABELS);
-
-  const years = yearsFrom(projects, 'created_at');
-
-  const filteredProjects = filterByDate(projects, 'created_at', { month: monthFilter, year: yearFilter })
-    .filter((p) => !statusFilter || p.status === statusFilter)
-    .filter(
-      (p) =>
-        !search ||
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'date_desc') return (b.created_at || '').localeCompare(a.created_at || '');
-      if (sortBy === 'date_asc') return (a.created_at || '').localeCompare(b.created_at || '');
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      return 0;
-    });
-
+  const managers = useMemo(
+    () => [...new Set(projects.map((project) => project.manager).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [projects]
+  );
+  const sectors = useMemo(
+    () => [...new Set(projects.map((project) => project.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [projects]
+  );
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch = !normalizedSearch || [
+      project.name,
+      project.client_name,
+      project.project_ref,
+    ].some((value) => (value || '').toLocaleLowerCase().includes(normalizedSearch));
+    const matchesStatus = !statusFilter || STATUS_GROUPS.find((group) => group.value === statusFilter)?.statuses.includes(project.status);
+    return matchesSearch
+      && matchesStatus
+      && (!managerFilter || project.manager === managerFilter)
+      && (!sectorFilter || project.sector === sectorFilter);
+  });
   const { page, setPage, totalPages, paginated } = usePagination(filteredProjects, 12);
-  const hasFilters = statusFilter || search || monthFilter || yearFilter;
+  const counts = STATUS_GROUPS.reduce((totals, group) => {
+    totals[group.value] = projects.filter((project) => group.statuses.includes(project.status)).length;
+    return totals;
+  }, {});
+  const hasFilters = Boolean(search || statusFilter || managerFilter || sectorFilter);
 
   const clearFilters = () => {
-    setStatusFilter('');
     setSearch('');
-    setMonthFilter('');
-    setYearFilter('');
+    setStatusFilter('');
+    setManagerFilter('');
+    setSectorFilter('');
+    setPage(1);
+  };
+
+  const openProject = (projectId) => navigate(`/projects/${projectId}`);
+  const handleRowKeyDown = (event, projectId) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openProject(projectId);
+    }
   };
 
   return (
-    <div>
+    <div className="projects-overview">
       <div className="page-sticky-header">
         <BackButton alwaysTo="/" label="Back to Dashboard" />
         <PageHeader
           icon={IconBriefcase}
           title="Projects"
-          subtitle="Every project, from prospect through completion."
+          subtitle="Manage and track Safebox Energy projects."
           actions={
-            <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-              <IconPlus size={18} /> New Project
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/projects/new')}>
+              <IconPlus size={18} /> Create Project
             </button>
           }
         />
       </div>
 
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
-
-      {!loading && projects.length > 0 && (
-        <div className="stat-grid">
-          <div className="stat-card"><div><div className="stat-value">{filteredProjects.length}</div><div className="stat-label">Total projects</div></div></div>
-          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'prospect').length}</div><div className="stat-label">Prospects</div></div></div>
-          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'on_going' || p.status === 'active_eaas').length}</div><div className="stat-label">Active / On-going</div></div></div>
-          <div className="stat-card"><div><div className="stat-value">{filteredProjects.filter((p) => p.status === 'completed').length}</div><div className="stat-label">Completed</div></div></div>
+      {error && (
+        <div className="alert alert-error" role="alert">
+          {error}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>Retry</button>
         </div>
       )}
 
-      {showForm && (
-        <form className="panel form-grid" onSubmit={handleSubmit} noValidate>
-          <label className={fieldErrors.name ? 'has-error' : ''}>
-            Project Name
-            <input name="name" value={form.name} onChange={handleChange} required aria-invalid={Boolean(fieldErrors.name)} />
-            {fieldErrors.name && <span className="field-error">{fieldErrors.name}</span>}
-          </label>
-          <label>
-            Client Name
-            <input name="client_name" value={form.client_name} onChange={handleChange} />
-          </label>
-          <label>
-            Client Address
-            <input name="client_address" value={form.client_address} onChange={handleChange} />
-          </label>
-          <label>
-            Client Contact
-            <input name="client_contact" value={form.client_contact} onChange={handleChange} />
-          </label>
-          <label>
-            Project Manager
-            <input name="manager" value={form.manager} onChange={handleChange} />
-          </label>
-          <label>
-            System Size (kWp)
-            <input name="system_size_kwp" type="number" min="0" step="0.1" value={form.system_size_kwp} onChange={handleChange} />
-          </label>
-          <label>
-            Sector
-            <select name="sector" value={form.sector} onChange={handleChange}>
-              <option value="">Select sector</option>
-              {SECTORS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </label>
-          <label>
-            Business Model
-            <select name="business_model" value={form.business_model} onChange={handleChange}>
-              <option value="">Select business model</option>
-              {Object.entries(BUSINESS_MODEL_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </label>
-          <label className={fieldErrors.payment_category ? 'has-error' : ''}>
-            Payment Category
-            <select name="payment_category" value={form.payment_category} onChange={handleChange}>
-              <option value="">Select payment category</option>
-              {allowedPaymentCategories.map((value) => (
-                <option key={value} value={value}>{PAYMENT_CATEGORY_LABELS[value]}</option>
-              ))}
-            </select>
-            {fieldErrors.payment_category && <span className="field-error">{fieldErrors.payment_category}</span>}
-          </label>
-          <label className="span-2">
-            Description
-            <textarea name="description" value={form.description} onChange={handleChange} rows={3} />
-          </label>
-          <div className="span-2">
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Create Project'}
+      {!loading && !error && (
+        <div className="stat-grid project-summary-grid">
+          <button type="button" className={`stat-card stat-filter-card ${!statusFilter ? 'selected' : ''}`} aria-pressed={!statusFilter} onClick={() => { setStatusFilter(''); setPage(1); }}>
+            <span><span className="stat-value">{projects.length}</span><span className="stat-label">Total Projects</span></span>
+          </button>
+          {STATUS_GROUPS.slice(0, 4).map((group) => (
+            <button
+              type="button"
+              className={`stat-card stat-filter-card ${statusFilter === group.value ? 'selected' : ''}`}
+              aria-pressed={statusFilter === group.value}
+              onClick={() => { setStatusFilter(statusFilter === group.value ? '' : group.value); setPage(1); }}
+              key={group.value}
+            >
+              <span><span className="stat-value">{counts[group.value]}</span><span className="stat-label">{group.label}</span></span>
             </button>
-          </div>
-        </form>
-      )}
-
-      {!loading && projects.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or client…" style={{ width: 200 }} />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All statuses</option>
-            <option value="prospect">Prospect</option>
-            <option value="quote_accepted">Quote Accepted</option>
-            <option value="on_going">On-going</option>
-            <option value="active_eaas">Active (EaaS)</option>
-            <option value="completed">Completed</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
-            <option value="">All years</option>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
-            <option value="">All months</option>
-            {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="date_desc">Newest first</option>
-            <option value="date_asc">Oldest first</option>
-            <option value="name">Sort by name</option>
-          </select>
-          {hasFilters && <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}><IconX size={14} /> Clear</button>}
-          <span className="page-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}</span>
+          ))}
         </div>
       )}
 
-      {loading ? (
-        <div className="panel"><SkeletonRows rows={4} columns={1} /></div>
-      ) : projects.length === 0 ? (
-        <EmptyState
-          icon={IconFolderOff}
-          title="No projects yet"
-          description="Create your first project to start quoting."
-        />
-      ) : filteredProjects.length === 0 ? (
-        <EmptyState icon={IconFolderOff} title="No projects match your filters" />
-      ) : (
-        <>
-          <div className="card-grid">
-            {paginated.map((project) => (
-              <Link to={`/projects/${project.id}`} className="job-card" key={project.id}>
-                <h3>{project.name}</h3>
-                <p>{project.client_name || 'No client assigned'}</p>
-                <div className="quote-option-flags">
-                  <StatusBadge type="projectStatus" value={project.status} />
-                  {project.business_model && <StatusBadge type="businessModel" value={project.business_model} />}
-                </div>
-                <div className="job-card-footer">
-                  <span>{project.quotation_count} quote option(s)</span>
-                  <span>{new Date(project.created_at).toLocaleDateString()}</span>
-                </div>
-              </Link>
-            ))}
+      <section className="project-list-section" aria-labelledby="all-projects-heading">
+        <div className="project-list-toolbar">
+          <div>
+            <h2 id="all-projects-heading">All Projects</h2>
+            {!loading && <span className="page-subtitle">{filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}</span>}
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </>
-      )}
+          <div className="project-filters">
+            <label className="project-search">
+              <span className="sr-only">Search project, client, or reference</span>
+              <input
+                value={search}
+                onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                placeholder="Search projects, clients or references…"
+              />
+            </label>
+            <select aria-label="Filter by status" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
+              <option value="">All statuses</option>
+              {STATUS_GROUPS.map((group) => <option key={group.value} value={group.value}>{group.label}</option>)}
+            </select>
+            <select aria-label="Filter by project manager" value={managerFilter} onChange={(event) => { setManagerFilter(event.target.value); setPage(1); }}>
+              <option value="">All project managers</option>
+              {managers.map((manager) => <option key={manager} value={manager}>{manager}</option>)}
+            </select>
+            <select aria-label="Filter by sector" value={sectorFilter} onChange={(event) => { setSectorFilter(event.target.value); setPage(1); }}>
+              <option value="">All sectors</option>
+              {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+            </select>
+            {hasFilters && <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}>Clear filters</button>}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="panel"><SkeletonRows rows={5} columns={7} /></div>
+        ) : !error && projects.length === 0 ? (
+          <EmptyState
+            icon={IconFolderOff}
+            title="No projects yet"
+            description="Create a project to start tracking confirmed customer work."
+            action={<button type="button" className="btn btn-primary" onClick={() => navigate('/projects/new')}><IconPlus size={18} /> Create Project</button>}
+          />
+        ) : !error && filteredProjects.length === 0 ? (
+          <EmptyState icon={IconFolderOff} title="No projects match your filters" action={hasFilters && <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>} />
+        ) : (
+          <>
+            <div className="project-table-wrap">
+              <table className="data-table project-table">
+                <thead>
+                  <tr>
+                    <th>Project Reference</th>
+                    <th>Project Name</th>
+                    <th>Client Name</th>
+                    <th>Project Manager</th>
+                    <th>Sector</th>
+                    <th>Status</th>
+                    <th>Date Created</th>
+                    <th><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((project) => (
+                    <tr
+                      className="project-table-row"
+                      key={project.id}
+                      tabIndex={0}
+                      onClick={() => openProject(project.id)}
+                      onKeyDown={(event) => handleRowKeyDown(event, project.id)}
+                    >
+                      <td data-label="Project Reference">{project.project_ref || '—'}</td>
+                      <td data-label="Project Name"><strong>{project.name}</strong></td>
+                      <td data-label="Client Name">{project.client_name || '—'}</td>
+                      <td data-label="Project Manager">{project.manager || '—'}</td>
+                      <td data-label="Sector">{project.sector || '—'}</td>
+                      <td data-label="Status"><StatusBadge type="projectStatus" value={project.status} /></td>
+                      <td data-label="Date Created">{dateLabel(project.created_at)}</td>
+                      <td data-label="Actions" className="project-action-cell"><ProjectActions projectId={project.id} navigate={navigate} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="project-mobile-list">
+              {paginated.map((project) => (
+                <article
+                  className="project-mobile-card"
+                  key={project.id}
+                  tabIndex={0}
+                  onClick={() => openProject(project.id)}
+                  onKeyDown={(event) => handleRowKeyDown(event, project.id)}
+                >
+                  <div className="project-mobile-card-header">
+                    <h3>{project.name}</h3>
+                    <ProjectActions projectId={project.id} navigate={navigate} />
+                  </div>
+                  <p className="project-mobile-reference">{project.project_ref || '—'}{project.client_name ? ` · ${project.client_name}` : ''}</p>
+                  <div className="project-mobile-card-footer">
+                    <span>{project.manager || 'Unassigned'}</span>
+                    <StatusBadge type="projectStatus" value={project.status} />
+                  </div>
+                  <div className="project-mobile-card-meta">
+                    <span>{project.sector || 'Sector not set'}</span>
+                    <time dateTime={project.created_at || undefined}>{dateLabel(project.created_at)}</time>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
+        )}
+      </section>
     </div>
   );
 }

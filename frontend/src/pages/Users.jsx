@@ -15,13 +15,13 @@ export default function Users() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin', department: 'finance' });
   const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', role: 'admin', status: 'Active' });
+  const [editForm, setEditForm] = useState({ name: '', role: 'admin', department: 'finance', status: 'Active' });
 
   const loadUsers = () => {
     setLoading(true);
@@ -33,10 +33,13 @@ export default function Users() {
 
   useEffect(loadUsers, []);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value, ...(name === 'role' && value === 'super_admin' ? { department: '' } : {}) });
+  };
 
   const openAddModal = () => {
-    setForm({ name: '', email: '', password: '', role: 'admin' });
+    setForm({ name: '', email: '', password: '', role: 'admin', department: 'finance' });
     setError('');
     setShowAddModal(true);
   };
@@ -48,7 +51,7 @@ export default function Users() {
     try {
       await register(form);
       setMessage(`User ${form.name} created successfully.`);
-      setForm({ name: '', email: '', password: '', role: 'admin' });
+      setForm({ name: '', email: '', password: '', role: 'admin', department: 'finance' });
       setShowAddModal(false);
       loadUsers();
     } catch (err) {
@@ -58,7 +61,7 @@ export default function Users() {
 
   const openEdit = (u) => {
     setEditingUser(u);
-    setEditForm({ name: u.name, role: u.role, status: u.status });
+    setEditForm({ name: u.name, role: u.role, department: u.department || 'finance', status: u.status });
   };
 
   const handleEditSubmit = async (e) => {
@@ -118,6 +121,7 @@ export default function Users() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Department</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th />
@@ -131,6 +135,7 @@ export default function Users() {
                   <td>
                     <StatusBadge type="role" value={u.role} />
                   </td>
+                  <td>{u.role === 'admin' ? (u.department === 'engineering' ? 'Engineering' : 'Finance') : 'All departments'}</td>
                   <td>
                     <StatusBadge type="userStatus" value={u.status} />
                   </td>
@@ -149,7 +154,7 @@ export default function Users() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={6}>No users found.</td>
+                  <td colSpan={7}>No users found.</td>
                 </tr>
               )}
             </tbody>
@@ -192,10 +197,19 @@ export default function Users() {
               <label>
                 Role
                 <select name="role" value={form.role} onChange={handleChange}>
-                  <option value="admin">Admin (day-to-day access)</option>
-                  <option value="super_admin">Super Admin (full access + approvals)</option>
+                  <option value="admin">Admin — Department access</option>
+                  <option value="super_admin">Super Admin — Management, all modules</option>
                 </select>
               </label>
+              {form.role === 'admin' && (
+                <label>
+                  Department
+                  <select name="department" value={form.department} onChange={handleChange} required>
+                    <option value="finance">Finance</option>
+                    <option value="engineering">Engineering</option>
+                  </select>
+                </label>
+              )}
               <div className="span-2 dialog-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
                   Cancel
@@ -222,13 +236,30 @@ export default function Users() {
                 Role
                 <select
                   value={editForm.role}
-                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  onChange={(e) => setEditForm({
+                    ...editForm,
+                    role: e.target.value,
+                    department: e.target.value === 'admin' ? (editForm.department || 'finance') : '',
+                  })}
                   disabled={editingUser.id === currentUser?.id}
                 >
                   <option value="admin">Admin</option>
-                  <option value="super_admin">Super Admin</option>
+                  <option value="super_admin">Super Admin — Management</option>
                 </select>
               </label>
+              {editForm.role === 'admin' && (
+                <label>
+                  Department
+                  <select
+                    value={editForm.department}
+                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    required
+                  >
+                    <option value="finance">Finance</option>
+                    <option value="engineering">Engineering</option>
+                  </select>
+                </label>
+              )}
               <label>
                 Status
                 <select

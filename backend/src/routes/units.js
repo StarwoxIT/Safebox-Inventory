@@ -1,16 +1,16 @@
 const express = require('express');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorizeDepartment } = require('../middleware/auth');
 const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   res.json(db.prepare('SELECT * FROM units ORDER BY name').all());
 });
 
-router.post('/', authenticate, authorize('super_admin'), (req, res) => {
+router.post('/', authenticate, authorizeDepartment('finance'), (req, res) => {
   const { name } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'name is required.' });
@@ -25,7 +25,7 @@ router.post('/', authenticate, authorize('super_admin'), (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM units WHERE id = ?').get(id));
 });
 
-router.delete('/:id', authenticate, authorize('super_admin'), (req, res) => {
+router.delete('/:id', authenticate, authorizeDepartment('finance'), (req, res) => {
   const result = db.prepare('DELETE FROM units WHERE id = ?').run(req.params.id);
   if (result.changes === 0) {
     return res.status(404).json({ error: 'Unit not found.' });

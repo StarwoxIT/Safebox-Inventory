@@ -32,18 +32,20 @@ const PIE_COLORS = ['#3379F3', '#1AC900', '#AFABAB', '#2560D0', '#0F8F00', '#141
 export default function Dashboard() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
+  const isFinance = isSuperAdmin || user?.department === 'finance';
+  const isEngineering = isSuperAdmin || user?.department === 'engineering';
   const [stats, setStats] = useState(null);
   const [settings, setSettings] = useState({});
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([getDashboardStats(), getSettings()])
+    Promise.all([getDashboardStats(), isFinance ? getSettings() : Promise.resolve({})])
       .then(([s, cfg]) => {
         setStats(s);
         setSettings(cfg);
       })
       .catch(() => setError('Failed to load dashboard stats.'));
-  }, []);
+  }, [isFinance]);
 
   if (error) return <div className="alert alert-error" role="alert">{error}</div>;
   if (!stats) return <div className="panel"><SkeletonRows rows={4} columns={4} /></div>;
@@ -51,18 +53,20 @@ export default function Dashboard() {
   const lowStockAlertsEnabled = settings.low_stock_alert !== 'false';
 
   const cards = [
-    { label: 'Total Projects', value: stats.totalProjects, icon: IconBriefcase },
-    { label: 'Total Quotes', value: stats.totalQuotes, icon: IconFileText },
-    ...(isSuperAdmin
+    ...(isEngineering ? [
+      { label: 'Total Projects', value: stats.totalProjects, icon: IconBriefcase },
+      { label: 'Active EaaS Projects', value: stats.activeEaasProjects, icon: IconBolt },
+    ] : []),
+    ...(isFinance
       ? [
           { label: 'Outstanding Balance', value: currency.format(stats.outstandingBalance), icon: IconClock },
           { label: 'Confirmed Income (Markup)', value: currency.format(stats.confirmedIncome), icon: IconReceipt2 },
+          { label: 'Inventory Value', value: currency.format(stats.totalStockValue), icon: IconBoxSeam },
+          { label: 'Payments Due', value: stats.duePaymentsCount, icon: IconCashBanknote },
+          { label: 'Pending Approvals', value: stats.pendingApprovals, icon: IconAlertTriangle },
         ]
       : []),
-    { label: 'Inventory Value', value: currency.format(stats.totalStockValue), icon: IconBoxSeam },
-    ...(isSuperAdmin ? [{ label: 'Payments Due', value: stats.duePaymentsCount, icon: IconCashBanknote }] : []),
-    { label: 'Pending Approvals', value: stats.pendingApprovals, icon: IconAlertTriangle },
-    { label: 'Active EaaS Projects', value: stats.activeEaasProjects, icon: IconBolt },
+    ...(isSuperAdmin ? [{ label: 'Total Quotes', value: stats.totalQuotes, icon: IconFileText }] : []),
   ];
 
   const catData = Object.entries(stats.categorySummary || {}).map(([name, v]) => ({
@@ -74,7 +78,10 @@ export default function Dashboard() {
   return (
     <div>
       <div className="page-sticky-header">
-        <PageHeader title="Dashboard" subtitle="Portal overview across projects, quotes, inventory and payments." />
+        <PageHeader
+          title="Dashboard"
+          subtitle={isSuperAdmin ? 'Management overview across all departments.' : `Overview for ${user.department === 'engineering' ? 'Engineering' : 'Finance'}.`}
+        />
       </div>
 
       <div className="stat-grid">
@@ -89,23 +96,23 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {lowStockAlertsEnabled && stats.belowThreshold > 0 && (
+      {isFinance && lowStockAlertsEnabled && stats.belowThreshold > 0 && (
         <div className="alert alert-error" role="status">
           {stats.belowThreshold} product{stats.belowThreshold > 1 ? 's' : ''} below reorder threshold — reorder required.
         </div>
       )}
-      {lowStockAlertsEnabled && stats.lowStock > 0 && (
+      {isFinance && lowStockAlertsEnabled && stats.lowStock > 0 && (
         <div className="alert alert-error" role="status" style={{ background: 'var(--status-warning-bg, #fff4e0)' }}>
           {stats.lowStock} product{stats.lowStock > 1 ? 's' : ''} approaching minimum threshold.
         </div>
       )}
-      {stats.openOemReturns > 0 && (
+      {isFinance && stats.openOemReturns > 0 && (
         <div className="alert alert-error" role="status">
           {stats.openOemReturns} open OEM return{stats.openOemReturns > 1 ? 's' : ''} awaiting reconciliation.
         </div>
       )}
 
-      {isSuperAdmin && stats.duePaymentsCount > 0 && (
+      {isFinance && stats.duePaymentsCount > 0 && (
         <div className="panel" style={{ borderColor: 'var(--danger)' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <IconCashBanknote size={18} />
@@ -131,7 +138,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="panel">
+      {isEngineering && <div className="panel">
         <h2>Projects by Status</h2>
         <div className="quote-option-flags">
           {Object.entries(stats.projectsByStatus).map(([status, count]) => (
@@ -141,9 +148,9 @@ export default function Dashboard() {
           ))}
           {Object.keys(stats.projectsByStatus).length === 0 && <span className="page-subtitle">No projects yet.</span>}
         </div>
-      </div>
+      </div>}
 
-      {catData.length > 0 && (
+      {isFinance && catData.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="panel">
             <h2>Stock by Category</h2>
@@ -171,25 +178,27 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="panel">
-        <h2>Revenue by Month</h2>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={stats.revenueByMonth} margin={{ left: 8, right: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)' }} />
-            <YAxis
-              stroke="var(--text-muted)"
-              tick={{ fill: 'var(--text-muted)' }}
-              width={72}
-              tickFormatter={(value) => new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value)}
-            />
-            <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }} />
-            <Bar dataKey="total" fill="#1AC900" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      {isSuperAdmin && (
+        <div className="panel">
+          <h2>Revenue by Month</h2>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={stats.revenueByMonth} margin={{ left: 8, right: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="month" stroke="var(--text-muted)" tick={{ fill: 'var(--text-muted)' }} />
+              <YAxis
+                stroke="var(--text-muted)"
+                tick={{ fill: 'var(--text-muted)' }}
+                width={72}
+                tickFormatter={(value) => new Intl.NumberFormat(undefined, { notation: 'compact' }).format(value)}
+              />
+              <Tooltip formatter={(value) => currency.format(value)} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <Bar dataKey="total" fill="#1AC900" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-      <div className="panel">
+      {isSuperAdmin && <div className="panel">
         <h2>Recent Activity</h2>
         <ul className="activity-list">
           {stats.recentActivity.map((activity) => (
@@ -204,7 +213,7 @@ export default function Dashboard() {
           ))}
           {stats.recentActivity.length === 0 && <li>No activity yet.</li>}
         </ul>
-      </div>
+      </div>}
     </div>
   );
 }

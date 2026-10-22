@@ -6,8 +6,13 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'super_admin')) DEFAULT 'admin',
+  department TEXT CHECK (department IN ('finance', 'engineering')),
   status TEXT NOT NULL CHECK (status IN ('Active', 'Inactive')) DEFAULT 'Active',
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (
+    (role = 'super_admin' AND department IS NULL) OR
+    (role = 'admin' AND department IS NOT NULL AND department IN ('finance', 'engineering'))
+  )
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -53,25 +58,30 @@ CREATE TABLE IF NOT EXISTS products (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Projects: the single entry point covering quoting through execution.
+-- Projects track confirmed customer work.
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
+  project_ref TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   client_name TEXT,
   client_address TEXT,
   client_contact TEXT,
   description TEXT,
   status TEXT NOT NULL CHECK (
-    status IN ('prospect', 'quote_accepted', 'on_going', 'active_eaas', 'completed', 'rejected')
-  ) DEFAULT 'prospect',
+    status IN ('prospect', 'quote_accepted', 'on_going', 'active_eaas', 'on_hold', 'completed', 'rejected', 'not_started', 'in_progress', 'cancelled')
+  ) DEFAULT 'not_started',
   business_model TEXT CHECK (
-    business_model IN ('outright_purchase', 'eaas', 'repair_service', 'maintenance_service', 'upgrade')
+    business_model IN ('outright_purchase', 'eaas', 'repair_service', 'maintenance_service', 'upgrade', 'direct_purchase', 'greenband_eaas', 'upgrade_expansion', 'installation_only', 'maintenance_repair', 'other')
   ),
   sector TEXT CHECK (
-    sector IN ('Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting', 'Other')
+    sector IN (
+      'Residential', 'Commercial', 'Industrial', 'Agricultural', 'Telecom', 'Street Lighting',
+      'Other', 'Residential / Home', 'Commercial / Business', 'Healthcare', 'Education',
+      'Agriculture', 'Industrial / Manufacturing', 'Government', 'Religious Organisation'
+    )
   ),
   payment_category TEXT CHECK (
-    payment_category IN ('full_payment', 'installments', 'pay_as_you_go')
+    payment_category IN ('full_payment', 'installments', 'pay_as_you_go', 'one_time_payment', 'instalment_payments', 'other')
   ),
   manager TEXT,
   system_size_kwp REAL NOT NULL DEFAULT 0,
@@ -137,6 +147,16 @@ CREATE TABLE IF NOT EXISTS project_materials (
   quantity REAL NOT NULL,
   created_by TEXT REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS planned_project_materials (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id),
+  quantity REAL NOT NULL CHECK (quantity > 0),
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS project_engineers (
