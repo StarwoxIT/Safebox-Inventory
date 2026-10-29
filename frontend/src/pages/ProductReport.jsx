@@ -94,7 +94,7 @@ export default function ProductReport() {
         {error && <div className="alert alert-error" role="alert">{error}</div>}
 
         {loading ? (
-          <SkeletonRows rows={5} columns={7} />
+          <SkeletonRows rows={5} columns={6} />
         ) : !report || report.items.length === 0 ? (
           <EmptyState title="No products match this filter" />
         ) : (
@@ -102,21 +102,38 @@ export default function ProductReport() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>ID</th><th>Category</th><th>Model</th><th>Unit Cost</th><th>Stock</th><th>Status</th><th>Added</th>
+                  <th>ID</th><th>Category</th><th>Model</th><th>Current Stock</th><th>Unit Cost</th><th>Total Value</th>
                 </tr>
               </thead>
               <tbody>
-                {report.items.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.id}</td>
-                    <td>{[p.category, p.subcategory].filter(Boolean).join(' / ')}</td>
-                    <td>{[p.brand, p.model].filter(Boolean).join(' ')}</td>
-                    <td>{currency.format(p.unitCost)}</td>
-                    <td>{p.currentStock}</td>
-                    <td>{p.status}</td>
-                    <td>{(p.createdAt || '').slice(0, 10)}</td>
-                  </tr>
-                ))}
+                {(() => {
+                  const rows = [];
+                  let currentCategory = null;
+
+                  report.items.forEach((p) => {
+                    if (currentCategory !== p.category) {
+                      currentCategory = p.category;
+                      rows.push(
+                        <tr key={`${p.category}-subtotal`} style={{ background: '#f5f5f5', fontWeight: 700 }}>
+                          <td colSpan={6}>{p.category || 'Uncategorized'} total: {currency.format(report.totals?.[p.category] || 0)}</td>
+                        </tr>
+                      );
+                    }
+
+                    rows.push(
+                      <tr key={p.id}>
+                        <td>{p.id}</td>
+                        <td>{[p.category, p.subcategory].filter(Boolean).join(' / ')}</td>
+                        <td>{[p.brand, p.model].filter(Boolean).join(' ')}</td>
+                        <td>{p.currentStock}</td>
+                        <td>{currency.format(p.unitCost)}</td>
+                        <td>{currency.format(p.totalAmount)}</td>
+                      </tr>
+                    );
+                  });
+
+                  return rows;
+                })()}
               </tbody>
             </table>
           </div>
