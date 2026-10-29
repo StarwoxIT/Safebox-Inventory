@@ -99,12 +99,19 @@ function getProductReport({ category, subcategory, from, to } = {}) {
     minThreshold: p.min_threshold,
     maxThreshold: p.max_threshold,
     currentStock: stockMap[p.id] || 0,
+    totalAmount: (stockMap[p.id] || 0) * p.unit_cost,
     status: p.status,
     createdBy: p.created_by_name,
     createdAt: p.created_at,
   }));
 
-  return { items, category: category || null, subcategory: subcategory || null, from: from || null, to: to || null };
+  const totals = items.reduce((acc, item) => {
+    const categoryKey = item.category || 'Uncategorized';
+    acc[categoryKey] = (acc[categoryKey] || 0) + item.totalAmount;
+    return acc;
+  }, {});
+
+  return { items, totals, category: category || null, subcategory: subcategory || null, from: from || null, to: to || null };
 }
 
 module.exports = { getStockMovementReport, getProductReport };

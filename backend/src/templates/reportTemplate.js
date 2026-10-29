@@ -57,6 +57,13 @@ function periodLabel(from, to) {
   return 'All time';
 }
 
+function exportDateLabel() {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 function buildStockMovementReportHtml(report, company) {
   const rows = report.items
     .map(
@@ -97,9 +104,20 @@ function buildStockMovementReportHtml(report, company) {
 
 function buildProductReportHtml(report, company) {
   const filterBits = [report.category, report.subcategory].filter(Boolean).join(' / ') || 'All categories';
+  let currentCategory = null;
   const rows = report.items
-    .map(
-      (p, idx) => `
+    .flatMap((p, idx) => {
+      const categoryRows = [];
+      if (currentCategory !== p.category) {
+        currentCategory = p.category;
+        const categoryTotal = Number(report.totals?.[p.category] || 0);
+        categoryRows.push(`
+          <tr class="${idx % 2 === 1 ? 'zebra' : ''}">
+            <td colspan="11" style="font-weight:700; background:#f2f2f2;">${escapeHtml(p.category || 'Uncategorized')} total: ${formatMoney(categoryTotal)}</td>
+          </tr>`);
+      }
+
+      categoryRows.push(`
       <tr class="${idx % 2 === 1 ? 'zebra' : ''}">
         <td>${escapeHtml(p.id)}</td>
         <td>${escapeHtml(p.category)}</td>
@@ -109,12 +127,13 @@ function buildProductReportHtml(report, company) {
         <td>${escapeHtml(p.unit)}</td>
         <td class="num">${formatMoney(p.unitCost)}</td>
         <td class="num">${p.currentStock}</td>
+        <td class="num">${formatMoney(p.totalAmount)}</td>
         <td class="num">${p.minThreshold}</td>
         <td class="num">${p.maxThreshold}</td>
-        <td>${escapeHtml(p.status)}</td>
-        <td>${escapeHtml((p.createdAt || '').slice(0, 10))}</td>
-      </tr>`
-    )
+      </tr>`);
+
+      return categoryRows;
+    })
     .join('');
 
   const body = `
@@ -122,13 +141,13 @@ function buildProductReportHtml(report, company) {
       <thead>
         <tr>
           <th>Product ID</th><th>Category</th><th>Sub-Category</th><th>Brand</th><th>Model</th><th>Unit</th>
-          <th class="num">Unit Cost</th><th class="num">Current Stock</th><th class="num">Min</th><th class="num">Max</th><th>Status</th><th>Added</th>
+          <th class="num">Unit Cost</th><th class="num">Current Stock</th><th class="num">Total Value</th><th class="num">Min</th><th class="num">Max</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="12" style="text-align:center; padding: 16px;">No products match this filter.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="11" style="text-align:center; padding: 16px;">No products match this filter.</td></tr>`}</tbody>
     </table>`;
 
-  return wrap('Product Report', `${company.name} — ${filterBits} — ${periodLabel(report.from, report.to)} — generated ${new Date().toISOString().slice(0, 10)}`, body, company);
+  return wrap('Product Report', `${company.name} — ${filterBits} — ${periodLabel(report.from, report.to)} — exported on ${exportDateLabel()}`, body, company);
 }
 
 module.exports = { buildStockMovementReportHtml, buildProductReportHtml };

@@ -30,10 +30,9 @@ const PRODUCT_COLUMNS = [
   { header: 'Unit', key: 'unit', width: 10 },
   { header: 'Unit Cost', key: 'unitCost', width: 14 },
   { header: 'Current Stock', key: 'currentStock', width: 14 },
+  { header: 'Total Value', key: 'totalAmount', width: 14 },
   { header: 'Min Threshold', key: 'minThreshold', width: 14 },
   { header: 'Max Threshold', key: 'maxThreshold', width: 14 },
-  { header: 'Status', key: 'status', width: 12 },
-  { header: 'Added', key: 'createdAt', width: 18 },
 ];
 
 router.get('/stock-movements', authenticate, authorizeDepartment('finance'), (req, res) => {
